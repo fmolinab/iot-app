@@ -1,0 +1,134 @@
+.now-playing {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+.now-playing h3 {
+  color: #667eea;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+}
+
+.now-playing.empty {
+  text-align: center;
+  color: #a0aec0;
+  padding: 2rem;
+}
+
+.empty-message {
+  font-size: 1.1rem;
+  margin: 1rem 0;
+}
+
+.empty-hint {
+  font-size: 0.85rem;
+}
+
+.current-task h2 {
+  color: #2d3748;
+  font-size: 1.3rem;
+  margin: 0 0 0.5rem 0;
+  word-break: break-word;
+}
+
+.task-duration {
+  color: #718096;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.timer-section {
+  text-align: center;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f7fafc;
+  border-radius: 12px;
+}
+
+.timer-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.timer-icon {
+  font-size: 1.5rem;
+}
+
+.timer-time {
+  font-size: 2.5rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: #2d3748;
+}
+
+.timer-status {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-top: 0.5rem;
+}
+
+.task-controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.control-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.control-btn.play {
+  background: #48bb78;
+  color: white;
+}
+
+.control-btn.play:hover:not(:disabled) {
+  background: #38a169;
+  transform: translateY(-2px);
+}
+
+.control-btn.pause {
+  background: #ed8936;
+  color: white;
+}
+
+.control-btn.pause:hover:not(:disabled) {
+  background: #dd6b20;
+  transform: translateY(-2px);
+}
+
+.control-btn.complete {
+  background: #4299e1;
+  color: white;
+}
+
+.control-btn.complete:hover:not(:disabled) {
+  background: #3182ce;
+  transform: translateY(-2px);
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.device-mapping {
+  text-align: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  color: #a0aec0;
+  font-size: 0.7rem;
+}

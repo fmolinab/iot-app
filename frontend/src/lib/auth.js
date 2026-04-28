@@ -1,4 +1,5 @@
 // Use relative path for prod, localhost for dev 
+// src/lib/auth.js
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
 

@@ -1,0 +1,53 @@
+.task-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.action-btn:hover:not(:disabled) {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.play-task {
+  color: #48bb78;
+}
+
+.play-task:hover:not(:disabled) {
+  background: #e6fffa;
+}
+
+.queue-task {
+  color: #ed8936;
+}
+
+.queue-task.queued {
+  color: #38a169;
+  opacity: 1;
+}
+
+.current-badge {
+  background: #667eea;
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
