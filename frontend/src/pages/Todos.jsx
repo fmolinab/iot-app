@@ -113,6 +113,7 @@ export default function Todos() {
 
       const todoToAdd = newTodo.newTodo || newTodo;
       setTodos(currentTodos => [todoToAdd, ...currentTodos]);
+      await refreshTasks();
 
       const placement = handleTaskCreated(todoToAdd);
       console.log(`New task added to: ${placement}`);
