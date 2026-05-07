@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useHourglassWebSocket } from '../hooks/useHourglassWebSocket';
 import './NowPlaying.css';
 
 export default function NowPlaying({ 
   currentTask, 
   onComplete, 
   onStatusChange,
-  refreshTasks 
+  refreshTasks,
+  device
 }) {
   const [status, setStatus] = useState('idle'); // idle, active, paused, completed
   const [timeElapsed, setTimeElapsed] = useState(0);
   const intervalRef = useRef(null);
+  const lastHandledPositionRef = useRef(null);
+  const completingRef = useRef(false)
   
   const {
     connectionStatus,
@@ -20,7 +22,7 @@ export default function NowPlaying({
     subscribeToDevice,
     sendLedPulse,
     fetchDevices
-  } = useHourglassWebSocket();
+  } = device;
 
   // Reset timer when current task changes
   useEffect(() => {
@@ -42,29 +44,38 @@ export default function NowPlaying({
   // Listen to hardware position changes
   useEffect(() => {
     if (!devicePosition) return;
-    
+
+    // Ignore repeated same position signals
+    if (lastHandledPositionRef.current === devicePosition) {
+      return;
+    }
+
+    lastHandledPositionRef.current = devicePosition;
+
     console.log(`Hardware position changed to: ${devicePosition}`);
-    
-    // Send LED pulse as visual feedback
-    sendLedPulse();
-    
-    // Map hardware position to timer actions
-    switch(devicePosition) {
-      case 'A': // Upright — Start/Resume
-        if (status !== 'active') {
+
+    switch (devicePosition) {
+      case 'A':
+        if (status !== 'active' && currentTask) {
           handlePlay();
         }
         break;
-      case 'B': // Flipped — Complete
-        if (status !== 'completed' && currentTask) {
-          handleComplete();
+
+      case 'B':
+        if (!completingRef.current && status !== 'completed' && currentTask) {
+          completingRef.current = true;
+          handleComplete().finally(() => {
+            completingRef.current = false;
+          });
         }
         break;
-      case 'C': // Horizontal — Pause
+
+      case 'C':
         if (status === 'active') {
           handlePause();
         }
         break;
+
       default:
         break;
     }
@@ -106,7 +117,6 @@ export default function NowPlaying({
   pauseTimer();
   setStatus('completed');
   await onComplete?.();
-  await refreshTasks?.();
   setTimeElapsed(0);
   setStatus('idle');
   sendLedPulse(); // Visual feedback
@@ -245,7 +255,7 @@ export default function NowPlaying({
               Complete
             </button>
           </div>
-
+          
           <div className="device-mapping">
             <small>Device mapping: Play (A) | Pause (C) | Complete (B)</small>
           </div>

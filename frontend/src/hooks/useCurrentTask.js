@@ -81,19 +81,36 @@ export function useCurrentTask() {
     
     const updated = await updateTodo(currentTask.id, { completed: 1 });
     
-    // Refresh tasks list
     const refreshedTasks = await loadTasks();
-    
-    // Determine next task: queued first, then first incomplete
-    let nextTask = null;
+
+    const incompleteTasks = refreshedTasks.filter(t => t.completed !== 1);
+
+    let nextCurrentTask = null;
+    let nextQueuedTask = null;
+
     if (queuedTask) {
-      nextTask = refreshedTasks.find(t => t.id === queuedTask.id && t.completed !== 1);
-      setQueuedTask(null);
+      // Move queued task into Now Playing
+      nextCurrentTask = incompleteTasks.find(t => t.id === queuedTask.id) || null;
+
+      // Find the next incomplete task after the queued/current one
+      nextQueuedTask = incompleteTasks.find(
+        t => t.id !== currentTask.id && t.id !== queuedTask.id
+      ) || null;
     } else {
-      nextTask = refreshedTasks.find(t => t.completed !== 1 && t.id !== currentTask.id);
+      // No queue, so choose first available task
+      nextCurrentTask = incompleteTasks.find(t => t.id !== currentTask.id) || null;
+
+      // Then queue the task after that
+      if (nextCurrentTask) {
+        nextQueuedTask = incompleteTasks.find(
+          t => t.id !== currentTask.id && t.id !== nextCurrentTask.id
+        ) || null;
+      }
     }
-    
-    setCurrentTask(nextTask || null);
+
+    setCurrentTask(nextCurrentTask);
+    setQueuedTask(nextQueuedTask);
+
     return updated;
   }, [currentTask, queuedTask, loadTasks]);
 
@@ -124,6 +141,23 @@ export function useCurrentTask() {
     }
   }, [currentTask, queuedTask, loadTasks]);
 
+  //This will control the traffic for new tasks
+  const handleTaskCreated = useCallback((task) => {
+    setAllTasks(prev => [task, ...prev.filter(t => t.id !== task.id)]);
+
+    if (!currentTask) {
+      setCurrentTask(task);
+      return 'current';
+    }
+
+    if (!queuedTask && currentTask.id !== task.id) {
+      setQueuedTask(task);
+      return 'queued';
+    }
+    
+    return 'list';
+  }, [currentTask, queuedTask]);
+
   return {
     currentTask,
     queuedTask,
@@ -134,6 +168,7 @@ export function useCurrentTask() {
     setQueue,
     clearQueue,
     refreshTasks,
-    loadTasks
+    loadTasks,
+    handleTaskCreated,
   };
 }
