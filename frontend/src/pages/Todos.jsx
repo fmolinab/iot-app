@@ -10,6 +10,8 @@ import QueueDisplay from '../components/QueueDisplay';
 import TaskActions from '../components/TaskActions';
 import './Todos.css';
 
+import { useHourglassWebSocket } from '../hooks/useHourglassWebSocket';
+
 export default function Todos() {
   const [todos, setTodos] = useState([]);
   const [newTask, setNewTask] = useState('');
@@ -20,6 +22,8 @@ export default function Todos() {
   const [error, setError] = useState('');
   const [currentStatus, setCurrentStatus] = useState('idle');
   const navigate = useNavigate();
+
+  const hourglass = useHourglassWebSocket();
   
   const timeOptions = [];
   for (let hour = 0; hour < 24; hour++) {
@@ -39,7 +43,8 @@ export default function Todos() {
     setQueue,
     clearQueue,
     refreshTasks,
-    loadTasks
+    loadTasks,
+    handleTaskCreated
   } = useCurrentTask();
 
   useEffect(() => {
@@ -56,14 +61,16 @@ export default function Todos() {
     return () => clearInterval(interval);
   }, [navigate]);
 
-  async function loadTodos() {
+  async function loadTodos(showLoading = true) {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
+
       const data = await getTodos();
       if (!data) {
         setError('No todos found');
         return;
       }
+
       setTodos(data);
     } catch (err) {
       setError('Failed to load todos');
@@ -106,7 +113,11 @@ export default function Todos() {
 
       const todoToAdd = newTodo.newTodo || newTodo;
       setTodos(currentTodos => [todoToAdd, ...currentTodos]);
-      await refreshTasks();
+
+      const placement = handleTaskCreated(todoToAdd);
+      console.log(`New task added to: ${placement}`);
+
+      await loadTasks();
 
       setNewTask('');
       setDuration('');
@@ -348,10 +359,11 @@ export default function Todos() {
               await completeCurrentTask();
               setCurrentStatus('completed');
               await refreshTasks();
-              await loadTodos();
+              await loadTodos(false);
             }}
             onStatusChange={setCurrentStatus}
             refreshTasks={refreshTasks}
+            device={hourglass}
           />
           <QueueDisplay queuedTask={queuedTask} onClearQueue={clearQueue} />
         </div>

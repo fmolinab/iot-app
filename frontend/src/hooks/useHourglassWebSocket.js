@@ -187,8 +187,15 @@ export function useHourglassWebSocket() {
         if (data.type === 'sensor_data') {
           // Check if it's IMU data (sensor name 'imu' or value contains I)
           if (data.sensor === 'imu' || (typeof data.value === 'string' && data.value.startsWith('I'))) {
-            const rawValue = data.value;
-            const imuData = parseIMUData(rawValue.substring(1)); // Remove 'I' prefix
+            let imuData = null;
+
+            if (typeof data.value === 'string') {
+              const rawValue = data.value.startsWith('I') ? data.value.substring(1) : data.value;
+              imuData = parseIMUData(rawValue);
+            } else if (data.value?.accel) {
+              imuData = data.value;
+            }
+            
             if (imuData) {
               setLastSensorData(imuData);
               const position = determinePosition(imuData);
@@ -205,18 +212,18 @@ export function useHourglassWebSocket() {
         }
         
         // Handle device list response
-        else if (data.type === 'devices_list') {
+        else if (data.type === 'device_list') {
           setAvailableDevices(data.devices || []);
           console.log('Available devices:', data.devices);
         }
         
         // Handle subscription confirmation
-        else if (data.type === 'subscription_confirmed') {
+        else if (data.type === 'subscription_ack') {
           console.log(`Subscribed to ${data.device}`);
         }
         
         // Handle registration acknowledgment
-        else if (data.type === 'registration_ack') {
+        else if (data.type === 'pwa_registration_ack') {
           console.log(`Registration: ${data.status} - ${data.message}`);
         }
         
@@ -241,13 +248,12 @@ export function useHourglassWebSocket() {
       
       // Attempt to reconnect after 3 seconds
       setTimeout(() => {
-        if (connectionStatus !== 'connecting') {
-          console.log('Attempting to reconnect...');
-          connect();
-        }
+        console.log('Attempting to reconnect...');
+        connect();
       }, 3000);
+
     };
-  }, [sendPing, fetchDevices, connectionStatus]);
+  }, [sendPing, fetchDevices]);
   
   // Disconnect
   const disconnect = useCallback(() => {
