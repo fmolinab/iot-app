@@ -1,14 +1,10 @@
 module.exports = {
     uiPort: process.env.PORT || 1880,
 
-    adminAuth: {
-        type: "credentials",
-        users: [{
-            username: "admin",
-            password: "ADMIN_PASSWORD_HASH",
-            permissions: "*"
-        }]
-    },
+    // Disable public Node-RED editor in deployment.
+    // The runtime WebSocket/HTTP endpoints still work.
+    httpAdminRoot: false,
+    httpNodeRoot: "/",
 
     functionGlobalContext: {},
 

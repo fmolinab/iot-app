@@ -259,3 +259,70 @@
 .empty-hint {
   font-size: 0.8rem;
 }
+
+.notes-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.notes-modal {
+  width: min(520px, 100%);
+  background: #1f2933;
+  color: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  text-align: left;
+}
+
+.notes-modal h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.session-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.notes-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.notes-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 1rem;
+  background: #111827;
+  color: white;
+}
+
+.notes-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.notes-error {
+  color: #ff7b7b;
+  margin-top: 0.75rem;
+}

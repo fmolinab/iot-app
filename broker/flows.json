@@ -67,6 +67,18 @@
         "h": 1092
     },
     {
+        "id": "device_websocket_listener",
+        "type": "websocket-listener",
+        "path": "/ws/device",
+        "wholemsg": "false"
+    },
+    {
+        "id": "pwa_websocket_listener",
+        "type": "websocket-listener",
+        "path": "/ws/app",
+        "wholemsg": "false"
+    },
+    {
         "id": "device_websocket_in",
         "type": "websocket in",
         "z": "badef27c232a01ee",
@@ -679,7 +691,7 @@
         "type": "function",
         "z": "badef27c232a01ee",
         "name": "Actuator Command Router",
-        "func": "// ULTRA-OPTIMIZED: Generate ultra-compact actuator commands\n// Uses single-letter codes for simple actuators, JSON for complex ones\n\nconst cmdMsg = msg.parsedMessage;\nconst deviceUUID = msg.deviceUUID;\n\n// Fast validation\nif (!deviceUUID || !cmdMsg.actuator || cmdMsg.value === undefined) {\n    return null;\n}\n\n// Single context read\nconst devices = flow.get('devices') || {};\nconst device = devices[deviceUUID];\n\nif (!device) {\n    node.warn(`⚠️ Device not found: ${deviceUUID}`);\n    return null;\n}\n\n// Check if we have a compact code for this actuator\nconst actuatorCodeMap = device.actuatorCodeMap || {};\nconst actuatorInfo = actuatorCodeMap[cmdMsg.actuator];\n\nlet compactCmd;\n\nif (actuatorInfo && actuatorInfo.code) {\n    // ULTRA-COMPACT PATH: Use single-letter code\n    const code = actuatorInfo.code;\n    const value = cmdMsg.value;\n    const dataType = actuatorInfo.dataType;\n    \n    // Format based on data type\n    if (dataType === 'boolean') {\n        // L1 or L0 - handle string 'on'/'off', bool, or int\n        let boolVal;\n        if (typeof value === 'string') {\n            const v = value.toLowerCase();\n            boolVal = (v === 'on' || v === '1' || v === 'true');\n        } else {\n            boolVal = !!value;\n        }\n        compactCmd = code + (boolVal ? '1' : '0');\n    } else if (dataType === 'int' || dataType === 'float') {\n        // S90 or P128 or V50.5\n        compactCmd = code + value;\n    } else if (dataType === 'object' && actuatorInfo.type === 'rgb_led') {\n        // R255,128,0\n        compactCmd = code + value.r + ',' + value.g + ',' + value.b;\n    } else if (dataType === 'object' && actuatorInfo.type === 'stepper') {\n        // T200,1,100\n        compactCmd = code + value.steps + ',' + value.direction + ',' + value.speed;\n    } else if (dataType === 'object' && actuatorInfo.type === 'tone_buzzer') {\n        // Z440,1000\n        compactCmd = code + value.frequency + ',' + value.duration;\n    } else {\n        // Complex object - use JSON fallback\n        compactCmd = null;\n    }\n}\n\nif (compactCmd) {\n    // Ultra-compact format (2-10 bytes)\n    msg.payload = compactCmd;\n} else {\n    // JSON fallback for complex actuators\n    const actuatorCmd = {\n        a: cmdMsg.actuator,\n        v: cmdMsg.value\n    };\n    msg.payload = JSON.stringify(actuatorCmd);\n}\n\nmsg._session = device.sessionId;\nreturn msg;",
+        "func": "// ULTRA-OPTIMIZED: Generate ultra-compact actuator commands\n// Uses single-letter codes for simple actuators, JSON for complex ones\n\nconst cmdMsg = msg.parsedMessage;\nconst deviceUUID = msg.deviceUUID;\n\n// Fast validation\nif (!deviceUUID || !cmdMsg.actuator || cmdMsg.value === undefined) {\n    return null;\n}\n\n// Single context read\nconst devices = flow.get('devices') || {};\nconst device = devices[deviceUUID];\n\nif (!device) {\n    node.warn(`⚠️ Device not found: ${deviceUUID}`);\n    return null;\n}\n\n// Check if we have a compact code for this actuator\nconst actuatorCodeMap = device.actuatorCodeMap || {};\nconst actuatorInfo = actuatorCodeMap[cmdMsg.actuator];\n\nlet compactCmd;\n\nif (actuatorInfo && actuatorInfo.code) {\n    // ULTRA-COMPACT PATH: Use single-letter code\n    const code = actuatorInfo.code;\n    const value = cmdMsg.value;\n    const dataType = actuatorInfo.dataType;\n    \n    // Format based on data type\n    if (dataType === 'boolean') {\n        // L1 or L0 - handle string 'on'/'off', bool, or int\n        let boolVal;\n        if (typeof value === 'string') {\n            const v = value.toLowerCase();\n            boolVal = (v === 'on' || v === '1' || v === 'true');\n        } else {\n            boolVal = !!value;\n        }\n        compactCmd = code + (boolVal ? '1' : '0');\n    } else if (dataType === 'int' || dataType === 'float') {\n        // S90 or P128 or V50.5\n        compactCmd = code + value;\n    } else if (dataType === 'object' && actuatorInfo.type === 'rgb_led') {\n        // R255,128,0\n        compactCmd = code + value.r + ',' + value.g + ',' + value.b;\n    } else if (dataType === 'object' && actuatorInfo.type === 'stepper') {\n        // T200,1,100\n        compactCmd = code + value.steps + ',' + value.direction + ',' + value.speed;\n    } else if (dataType === 'object' && actuatorInfo.type === 'tone_buzzer') {\n        // Z440,1000\n        compactCmd = code + value.frequency + ',' + value.duration;\n    } else {\n        // Complex object - use JSON fallback\n        compactCmd = null;\n    }\n}\n\nif (compactCmd) {\n    // Ultra-compact format (2-10 bytes)\n    msg.payload = compactCmd;\n} else if (\n    cmdMsg.actuator === 'sand' &&\n    cmdMsg.value &&\n    typeof cmdMsg.value === 'object' &&\n    cmdMsg.value.command\n){\n    msg.payload = JSON.stringify(cmdMsg.value);\n} else {\n    // JSON fallback for complex actuators\n    const actuatorCmd = {\n        a: cmdMsg.actuator,\n        v: cmdMsg.value\n    };\n    msg.payload = JSON.stringify(actuatorCmd);\n}\n\nmsg._session = device.sessionId;\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -2150,7 +2162,9 @@
         "type": "link in",
         "z": "badef27c232a01ee",
         "name": "POST to backend",
-        "links": ["b3d1a07b4792c087"],
+        "links": [
+            "b3d1a07b4792c087"
+        ],
         "x": 915,
         "y": 1420,
         "wires": [
@@ -2165,7 +2179,9 @@
         "z": "badef27c232a01ee",
         "name": "WS Reg → Backend Webhook",
         "mode": "link",
-        "links": ["fb7a7207aa56d9a4"],
+        "links": [
+            "fb7a7207aa56d9a4"
+        ],
         "x": 1295,
         "y": 300,
         "wires": []
@@ -2244,17 +2260,5 @@
         "x": 1405,
         "y": 1600,
         "wires": []
-    },
-    {
-        "id": "device_websocket_listener",
-        "type": "websocket-listener",
-        "path": "/ws/device",
-        "wholemsg": "false"
-    },
-    {
-        "id": "pwa_websocket_listener",
-        "type": "websocket-listener",
-        "path": "/ws/app",
-        "wholemsg": "false"
     }
 ]

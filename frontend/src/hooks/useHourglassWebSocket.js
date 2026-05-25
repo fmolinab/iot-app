@@ -65,36 +65,58 @@ export function useHourglassWebSocket() {
     
     return null;
   };
+  // Send a generic actuator command to the ESP32 through Node-RED
+  const sendActuatorCommand = useCallback((actuator, value) => {
 
-  // Send LED command to ESP32
-  const sendLedCommand = useCallback((state) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket not connected');
       return false;
     }
-    
+
     if (!subscribedDevice) {
       console.warn('No device subscribed');
       return false;
     }
-    
+
     const command = {
       type: "actuator_cmd",
-      actuator: "led",
-      value: state ? 1 : 0,
-      device: subscribedDevice
+      actuator,
+      value,
+      device: subscribedDevice,
+      client_id: clientIdRef.current
     };
-    
+
     wsRef.current.send(JSON.stringify(command));
-    console.log(`LED command sent: ${state ? 'ON' : 'OFF'}`);
+    console.log(`Actuator command sent: ${actuator}`, value);
+
     return true;
   }, [subscribedDevice]);
+
+  // Send LED command to ESP32
+  const sendLedCommand = useCallback((state) => {
+    return sendActuatorCommand("led", state ? 1 : 0);
+  }, [sendActuatorCommand]);
 
   // Send LED pulse (brief blink)
   const sendLedPulse = useCallback(async () => {
     await sendLedCommand(true);
     setTimeout(() => sendLedCommand(false), 200);
   }, [sendLedCommand]);
+
+  // Send sand command to ESP32
+  const sendSandCommand = useCallback((durationMinutes) => {
+    const minutes = Number(durationMinutes);
+
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      console.warn('Invalid sand duration:', durationMinutes);
+      return false;
+    }
+
+    return sendActuatorCommand("sand", {
+      command: "START_SAND",
+      duration_minutes: minutes
+    });
+  }, [sendActuatorCommand]);
 
   // Subscribe to a device
   const subscribeToDevice = useCallback((deviceId) => {
@@ -284,8 +306,10 @@ export function useHourglassWebSocket() {
     subscribedDevice,
     subscribeToDevice,
     fetchDevices,
+    sendActuatorCommand,
     sendLedCommand,
     sendLedPulse,
+    sendSandCommand,
     connect,
     disconnect
   };

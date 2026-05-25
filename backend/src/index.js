@@ -7,6 +7,7 @@ const fs = require('fs');
 
 const authRoutes = require('./routes/auth');
 const todoRoutes = require('./routes/todos');
+const sessionsRoutes = require('./routes/sessions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/todos', todoRoutes);
+app.use('/api/sessions', sessionsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

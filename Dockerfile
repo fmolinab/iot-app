@@ -17,6 +17,10 @@ RUN cd frontend && npm install
 COPY backend ./backend/
 COPY frontend ./frontend/
 
+# Build-time variable for Vite frontend
+ARG VITE_WS_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+
 # Build frontend
 RUN cd frontend && npm run build
 
@@ -28,6 +32,8 @@ WORKDIR /app/backend
 
 # Expose the port
 EXPOSE 3000
+
+ENV NODE_ENV=production
 
 # Start the server
 CMD ["node", "src/index.js"]

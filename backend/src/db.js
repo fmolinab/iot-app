@@ -42,6 +42,26 @@ db.exec(`
     )
 `);
 
+//sessions table
+//stores completed Timer Mode / Focus Mode runs for analytics and notes
+db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        todo_id INTEGER,
+        mode TEXT NOT NULL,
+        planned_minutes INTEGER,
+        actual_seconds INTEGER NOT NULL,
+        overtime_seconds INTEGER DEFAULT 0,
+        notes TEXT,
+        started_at DATETIME NOT NULL,
+        ended_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (todo_id) REFERENCES todos (id) ON DELETE SET NULL
+    )
+`);
+
 const todoColumns = db.prepare("PRAGMA table_info(todos)").all();
 const todoColumnNames = todoColumns.map(col => col.name);
 

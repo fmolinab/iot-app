@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, changePassword, deleteAccount, removeAuthToken } from '../lib/auth';
 
 import { getTodos } from '../lib/todos';
+import { getSessions } from '../lib/sessions';
 
 import { formatEuropeanDate } from '../utils/todoUtils';
 
@@ -21,6 +22,7 @@ function Account() {
     const [message, setMessage] = useState({ text: '', type: '' });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [completedTodos, setCompletedTodos] = useState([]);
+    const [sessions, setSessions] = useState([]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -30,6 +32,7 @@ function Account() {
         }
         loadUser();
         loadCompletedTodos();
+        loadSessions();
     }, [navigate]);
 
     const loadUser = async () => {
@@ -48,15 +51,32 @@ function Account() {
 
     const loadCompletedTodos = async () => {
 
-    try {
-        const todos = await getTodos();
-        const completed = todos.filter(todo => todo.completed === 1);
-        setCompletedTodos(completed);
+        try {
+            const todos = await getTodos();
+            const completed = todos.filter(todo => todo.completed === 1);
+            setCompletedTodos(completed);
 
-    } catch (error) {
-        console.error('Error loading completed todos:', error);
-    }
-};
+        } catch (error) {
+            console.error('Error loading completed todos:', error);
+        }
+    };
+
+    const loadSessions = async () => {
+        try {
+            const data = await getSessions();
+            setSessions(data);
+        } catch (error) {
+            console.error('Error loading session:', error);
+        }
+    };
+
+    const formatDuration = (seconds) => {
+        const safeSeconds = Math.max(0, Number(seconds) || 0);
+        const minutes = Math.floor(safeSeconds / 60);
+        const remainingSeconds = safeSeconds % 60;
+
+        return `${minutes}m ${remainingSeconds}s`;
+    };
 
     const handlePasswordChange = async (e) => {
         e.preventDefault();
@@ -145,7 +165,51 @@ function Account() {
                         </ul>
                     )}
                 </div>
-                                        
+                    
+                <div className="past-tasks-section">
+                    <h2>Session History</h2>
+
+                    {sessions.length === 0 ? (
+                        <p className="info-note">No timer or focus sessions saved yet.</p>
+                    ) : (
+                        <ul className="past-tasks-list">
+                            {sessions.map(session => (
+                                <li key={session.id} className="past-task-item">
+                                    <div>
+                                        <strong>
+                                            {session.task || 'Deleted task'}
+                                        </strong>
+
+                                        <p className="past-task-date">
+                                            Mode: {session.mode === 'timer' ? 'Timer' : 'Focus'}
+                                        </p>
+
+                                        <p className="past-task-date">
+                                            Planned: {session.planned_minutes} min | Actual: {formatDuration(session.actual_seconds)}
+                                        </p>
+
+                                        {session.overtime_seconds > 0 && (
+                                            <p className="past-task-date">
+                                                Overtime: {formatDuration(session.overtime_seconds)}
+                                            </p>
+                                        )}
+
+                                        {session.notes && (
+                                            <p className="past-task-date">
+                                                Notes: {session.notes}
+                                            </p>
+                                        )}
+
+                                        <p className="past-task-date">
+                                            Completed: {formatEuropeanDate(session.ended_at)}
+                                        </p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+                
                 <div className="password-section">
                     <h2>Change Password</h2>
 
