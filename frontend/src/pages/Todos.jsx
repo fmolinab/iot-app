@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTodos, addTodo, deleteTodo } from '../lib/todos';
-import { isAuthenticated, removeAuthToken } from '../lib/auth';
+import { isAuthenticated } from '../lib/auth';
 import { useCurrentTask } from '../hooks/useCurrentTask';
 import NowPlaying from '../components/NowPlaying';
 import QueueDisplay from '../components/QueueDisplay';
@@ -171,6 +171,27 @@ export default function Todos() {
     navigate(`/todos/${todo.id}?edit=true`);
   }
 
+  const handleSwitchTask = async (newTask) => {
+    const confirmSwitch = (currentName, newName) => {
+      return window.confirm(
+        `Switch from "${currentName}" to "${newName}"?\n\nYour progress on "${currentName}" will be saved.`
+      );
+    };
+    
+    const success = await switchToTask(newTask, currentStatus, confirmSwitch);
+    if (success) {
+      setCurrentStatus('idle');
+      await loadTasks();
+    }
+  };
+
+  const handleQueue = (task) => {
+    if (queuedTask && queuedTask.id === task.id) {
+      return;
+    }
+    setQueue(task);
+  };
+
   const filteredTodos = getFilteredTodos();
   const sectionTitle = filter === 'completed' ? 'Completed Tasks' : 
                        filter === 'doitnow' ? 'Do It Now - Urgent Tasks' : 
@@ -269,6 +290,9 @@ export default function Todos() {
                 key={todo.id}
                 task={todo}
                 isCurrent={currentTask?.id === todo.id}
+                isQueued={queuedTask?.id === todo.id}
+                onPlay={handleSwitchTask}
+                onQueue={handleQueue}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />

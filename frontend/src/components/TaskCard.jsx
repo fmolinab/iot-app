@@ -3,11 +3,21 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTimeRemainingText, getUrgencyLevel } from '../utils/todoUtils';
 
-export default function TaskCard({ task, isCurrent, onEdit, onDelete }) {
+export default function TaskCard({ task, isCurrent, isQueued, onPlay, onQueue, onEdit, onDelete }) {
   const navigate = useNavigate();
 
   const handleCardClick = () => {
     navigate(`/todos/${task.id}`);
+  };
+
+  const handlePlayClick = (e) => {
+    e.stopPropagation();
+    onPlay(task);
+  };
+
+  const handleQueueClick = (e) => {
+    e.stopPropagation();
+    onQueue(task);
   };
 
   const handleEditClick = (e) => {
@@ -44,7 +54,7 @@ export default function TaskCard({ task, isCurrent, onEdit, onDelete }) {
     >
       <div className="task-title">{task.task}</div>
       
-      {task.description && (
+      {task.description && task.description !== null && (
         <div className="task-description">
           {task.description.length > 100 ? `${task.description.substring(0, 100)}...` : task.description}
         </div>
@@ -61,6 +71,23 @@ export default function TaskCard({ task, isCurrent, onEdit, onDelete }) {
       </div>
       
       <div className="task-actions" onClick={(e) => e.stopPropagation()}>
+        {!isCurrent && (
+          <button className="play-task-btn" onClick={handlePlayClick}>
+            Play
+          </button>
+        )}
+        {isCurrent && (
+          <button className="current-task-btn" disabled>
+            Current
+          </button>
+        )}
+        <button 
+          className={`queue-task-btn ${isQueued ? 'queued' : ''}`} 
+          onClick={handleQueueClick}
+          disabled={isQueued}
+        >
+          {isQueued ? 'Queued' : 'Queue'}
+        </button>
         <button className="edit-task-btn" onClick={handleEditClick}>
           Edit
         </button>

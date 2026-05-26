@@ -387,3 +387,60 @@
     padding: 1rem;
   }
 }
+/* Play and Queue buttons */
+.play-task-btn,
+.queue-task-btn,
+.current-task-btn {
+  flex: 1;
+  padding: 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.play-task-btn {
+  background: rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  color: var(--accent-cyan);
+}
+
+.play-task-btn:hover {
+  background: rgba(0, 212, 255, 0.3);
+  border-color: var(--accent-cyan);
+  transform: scale(0.98);
+}
+
+.queue-task-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.queue-task-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+  transform: scale(0.98);
+}
+
+.queue-task-btn.queued {
+  background: rgba(255, 107, 157, 0.15);
+  border-color: rgba(255, 107, 157, 0.4);
+  color: var(--accent-pink);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.current-task-btn {
+  background: var(--accent-cyan);
+  border: none;
+  color: var(--bg-primary);
+  cursor: default;
+  opacity: 0.8;
+}
+
+.current-task-btn:disabled {
+  cursor: not-allowed;
+}
