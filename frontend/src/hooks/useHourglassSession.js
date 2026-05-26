@@ -56,7 +56,10 @@ export function useHourglassSession({
       const startedAt = new Date().toISOString();
       startedAtRef.current = startedAt;
 
-      sendSandCommand?.('START_SAND', plannedMinutes);
+      // Send mode to ESP32:
+      // timer -> normal sand ends with task.
+      // focus -> firmware can switch to focus/overtime animation after planned duration.
+      sendSandCommand?.('START_SAND', plannedMinutes, mode);
     }
 
     if (status === 'paused') {
@@ -72,6 +75,7 @@ export function useHourglassSession({
     currentTask,
     sessionPhase,
     status,
+    mode,
     getPlannedMinutes,
     sendSandCommand,
     onStatusChange,
@@ -81,7 +85,6 @@ export function useHourglassSession({
   const startBreak = useCallback(() => {
     if (!currentTask) return false;
 
-    // If break is paused, this resumes it.
     if (sessionPhase === 'break' && status === 'paused') {
       sendSandCommand?.('RESUME_SAND');
       setStatus('active');
@@ -96,8 +99,8 @@ export function useHourglassSession({
     setPendingSession(null);
     breakCompletingRef.current = false;
 
-    // Hidden automatic break task: same physical hourglass, fixed 5 min.
-    sendSandCommand?.('START_SAND', BREAK_DURATION_MINUTES);
+    // Break is a hidden automatic task, but for firmware it should behave like timer mode.
+    sendSandCommand?.('START_SAND', BREAK_DURATION_MINUTES, 'timer');
 
     onStatusChange?.('break-active');
     startClock();
@@ -202,19 +205,17 @@ export function useHourglassSession({
     onStatusChange?.('idle');
   }, [clearClock, onStatusChange]);
 
-  // Reset when the real current task changes.
   useEffect(() => {
     resetSession();
   }, [currentTask?.id]);
 
-  // Cleanup when component unmounts.
   useEffect(() => {
     return () => {
       clearClock();
     };
   }, [clearClock]);
 
-  // Timer Mode auto-completion for the real task.
+  // Timer Mode ends automatically at planned duration.
   useEffect(() => {
     if (sessionPhase !== 'task') return;
     if (status !== 'active') return;
@@ -233,6 +234,9 @@ export function useHourglassSession({
     getPlannedMinutes,
     completeSession
   ]);
+
+  // Focus Mode does not auto-complete.
+  // It keeps counting upward, and completeSession() saves the actual stopped duration.
 
   // Hidden break auto-completion.
   useEffect(() => {
