@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTodos, updateTodo, deleteTodo } from '../lib/todos';
-import { getTodoColor, getTimeRemainingText, formatEuropeanDate } from '../utils/todoUtils';
+import {
+    getTodoColor,
+    getTimeRemainingText,
+    formatEuropeanDate,
+    getTodoUrgencyLabel,
+    formatDurationText
+} from '../utils/todoUtils';
 import './TodoPage.css';
 
 export default function TodoPage() {
@@ -139,7 +145,7 @@ export default function TodoPage() {
                             {todo.duration && (
                                 <div className="detail-item">
                                     <span className="detail-label">Duration:</span>
-                                    <span className="detail-value">{todo.duration} minutes</span>
+                                    <span className="detail-value">{formatDurationText(todo.duration)}</span>
                                 </div>
                             )}
 
@@ -170,13 +176,7 @@ export default function TodoPage() {
 
                         {!todo.completed && todo.due_date && (
                             <div className="urgency-indicator">
-                                Current urgency level: {
-                                    getTodoColor(todo) === '#ffcdd2' ? 'Overdue' :
-                                    getTodoColor(todo) === '#ff8a80' ? 'Critical' :
-                                    getTodoColor(todo) === '#ffb74d' ? 'Urgent' :
-                                    getTodoColor(todo) === '#fff176' ? 'Warning' :
-                                    getTodoColor(todo) === '#dce775' ? 'Approaching' : 'Good'
-                                }
+                                Current urgency level: {getTodoUrgencyLabel(todo)}
                             </div>
                         )}
                     </>

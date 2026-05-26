@@ -14,19 +14,10 @@ export function useHourglassSession({
   const startedAtRef = useRef(null);
 
   const getPlannedMinutes = useCallback(() => {
-    if (mode === 'timer') {
-      return 25;
-    }
+    return Number(currentTask?.duration) || 0;
 
-    const taskDuration = Number(currentTask?.duration);
-
-    if (Number.isFinite(taskDuration) && taskDuration > 0) {
-      return taskDuration;
-    }
-
-    return 45;
-  }, [mode, currentTask?.duration]);
-
+  }, [currentTask?.duration]);
+  
   const clearClock = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -44,25 +35,21 @@ export function useHourglassSession({
 
   const startSession = useCallback(() => {
     if (!currentTask) return false;
+    
+    const plannedMinutes = getPlannedMinutes();
+
+    if (plannedMinutes <= 0) return false;
 
     if (status === 'active') return true;
 
-    const plannedMinutes = getPlannedMinutes();
-
-    // New session starts from zero.
-    // Paused session continues from the existing elapsed time.
     if (status === 'idle' || status === 'completed') {
       setTimeElapsed(0);
       setPendingSession(null);
 
       const startedAt = new Date().toISOString();
       startedAtRef.current = startedAt;
-
-      // Tell the physical device how long the sand animation should run.
-      // This only sends if the WebSocket/device is connected.
       sendSandCommand?.(plannedMinutes);
     }
-
     setStatus('active');
     onStatusChange?.('active');
     startClock();
@@ -152,7 +139,7 @@ export function useHourglassSession({
 
     const plannedSeconds = getPlannedMinutes() * 60;
 
-    if (timeElapsed >= plannedSeconds) {
+    if (plannedSeconds > 0 && timeElapsed >= plannedSeconds) {
       completeSession();
     }
   }, [

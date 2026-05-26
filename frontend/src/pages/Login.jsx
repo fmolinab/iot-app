@@ -1,7 +1,7 @@
-// frontend/src/pages/Login.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, register, setAuthToken } from '../lib/auth';
+import './Login.css';
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -16,66 +17,78 @@ export default function Login() {
     setError('');
     setLoading(true);
 
-    console.log('Submitting', { isLogin, username });
-
     try {
-        const fn = isLogin ? login : register;
-        const data = await fn(username, password);
+      const fn = isLogin ? login : register;
+      const data = await fn(username, password);
 
-        console.log("Success?: Data: ", data);
+      setAuthToken(data.token);
 
-        setAuthToken(data.token);
-        console.log('Token saved, navigating...'); // debug
-        setTimeout(() => {
-          navigate('/todos');
-        }, 100); // small delay to make sure that the token gets saved??
-        
-
+      setTimeout(() => {
+        navigate('/todos');
+      }, 100);
     } catch (err) {
-        console.error("Error:", err);
-        setError(err.message || "An error occured"); 
+      console.error('Error:', err);
+      setError(err.message || 'An error occurred');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: '50px auto', padding: 20 }}>
-      <h2>{isLogin ? 'Login' : 'Register'}</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
+    <main className="login-page">
+      <section className="login-card">
+        <h2>{isLogin ? 'Welcome back' : 'Create account'}</h2>
+
+        <p className="login-subtitle">
+          {isLogin
+            ? 'Log in to continue your focus session.'
+            : 'Create an account to start using the hourglass app.'}
+        </p>
+
+        <form className="login-form" onSubmit={handleSubmit}>
           <input
+            className="login-input"
             type="text"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            style={{ width: '100%', marginBottom: 10, padding: 8 }}
           />
-        </div>
-        <div>
+
           <input
+            className="login-input"
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: '100%', marginBottom: 10, padding: 8 }}
           />
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" style={{ padding: '8px 16px' }}>
-          {isLogin ? 'Login' : 'Register'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsLogin(!isLogin)}
-          style={{ marginLeft: 10, padding: '8px 16px' }}
-        >
-          Switch to {isLogin ? 'Register' : 'Login'}
-        </button>
-      </form>
-    </div>
+
+          {error && <p className="login-error">{error}</p>}
+
+          <div className="login-actions">
+            <button
+              className="login-primary-btn"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? 'Please wait...' : isLogin ? 'Login' : 'Register'}
+            </button>
+
+            <button
+              className="login-secondary-btn"
+              type="button"
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError('');
+              }}
+              disabled={loading}
+            >
+              Switch to {isLogin ? 'Register' : 'Login'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
   );
 }
-
