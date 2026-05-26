@@ -1,3 +1,6 @@
+/* Account Page - Dark Theme */
+/* Handcrafted, not generated */
+
 .account-container {
     max-width: 600px;
     margin: 2rem auto;
@@ -6,39 +9,44 @@
 }
 
 .account-card {
-    background: white;
-    border-radius: 8px;
+    background: #131725;
+    border-radius: 6px;
     padding: 2rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
+    border: 1px solid #2D3A5E;
 }
 
 .account-card h1 {
     margin-bottom: 1.5rem;
-    color: #333;
+    color: #F0F3FA;
+    font-size: 1.8rem;
+    letter-spacing: -0.3px;
 }
 
 .account-card h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-    color: #555;
-    border-bottom: 2px solid #eee;
+    font-size: 1.2rem;
+    margin: 1.5rem 0 1rem;
+    color: #CBD5E0;
+    border-bottom: 2px solid #2D3A5E;
     padding-bottom: 0.5rem;
 }
 
 .user-info {
     margin-bottom: 2rem;
     padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 6px;
+    background: #0E1222;
+    border-radius: 5px;
+    border: 1px solid #2D3A5E;
 }
 
 .user-info p {
     margin: 0.5rem 0;
+    color: #E2E8F0;
 }
 
 .info-note {
     font-size: 0.85rem;
-    color: #666;
+    color: #6A7A9A;
     font-style: italic;
     margin-top: 0.75rem;
 }
@@ -50,83 +58,101 @@
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: #555;
+    font-weight: 600;
+    color: #A0B0D0;
+    font-size: 0.9rem;
 }
 
 .form-group input {
     width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #ddd;
+    padding: 0.7rem;
+    border: 1px solid #2D3A5E;
     border-radius: 4px;
     font-size: 1rem;
+    background: #0E1222;
+    color: #E2E8F0;
+    transition: all 0.12s ease;
 }
 
 .form-group input:focus {
     outline: none;
-    border-color: #4CAF50;
+    border-color: #00D4FF;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+    background: #0A0E1A;
 }
 
 .btn-primary {
-    background-color: #4CAF50;
-    color: white;
-    padding: 0.5rem 1rem;
-    border: none;
+    background: #2D3A5E;
+    color: #F0F3FA;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid #4A5A7E;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 1rem;
-    margin-top: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.12s ease;
 }
 
 .btn-primary:hover {
-    background-color: #45a049;
+    background: #3A4A72;
+    border-color: #00D4FF;
+    transform: scale(0.98);
 }
 
 .btn-danger {
-    background-color: #dc3545;
-    color: white;
-    padding: 0.5rem 1rem;
-    border: none;
+    background: rgba(239, 75, 63, 0.15);
+    color: #ff8a80;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid rgba(239, 75, 63, 0.4);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.12s ease;
 }
 
 .btn-danger:hover {
-    background-color: #c82333;
+    background: rgba(239, 75, 63, 0.3);
+    border-color: #ef4b3f;
+    transform: scale(0.98);
 }
 
 .btn-secondary {
-    background-color: #6c757d;
-    color: white;
-    padding: 0.5rem 1rem;
-    border: none;
+    background: #0E1222;
+    color: #A0B0D0;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid #2D3A5E;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
     margin-left: 0.5rem;
+    transition: all 0.12s ease;
 }
 
 .btn-secondary:hover {
-    background-color: #5a6268;
+    background: #1A1F35;
+    border-color: #4A5A7E;
+    transform: scale(0.98);
 }
 
 .message {
     padding: 0.75rem;
     margin-bottom: 1rem;
     border-radius: 4px;
+    font-size: 0.9rem;
 }
 
 .message.success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background: rgba(76, 175, 80, 0.12);
+    color: #81c784;
+    border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
 .message.error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: rgba(239, 75, 63, 0.12);
+    color: #ff8a80;
+    border: 1px solid rgba(239, 75, 63, 0.3);
 }
 
 .password-section,
@@ -134,18 +160,14 @@
     margin-bottom: 2rem;
 }
 
-.password-section {
-    margin-top: 0;
-}
-
 .password-section input,
 .delete-confirm input {
-    background: #ffffff;
-    color: #2d3748;
+    background: #0E1222;
+    color: #E2E8F0;
 }
 
 .warning-text {
-    color: #dc3545;
+    color: #ff8a80;
     font-size: 0.9rem;
     margin-bottom: 1rem;
 }
@@ -153,16 +175,19 @@
 .delete-confirm {
     margin-top: 1rem;
     padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 4px;
+    background: #0E1222;
+    border-radius: 5px;
+    border: 1px solid #2D3A5E;
 }
 
 .delete-confirm input {
     width: 100%;
-    padding: 0.5rem;
+    padding: 0.6rem;
     margin: 0.5rem 0;
-    border: 1px solid #ddd;
+    border: 1px solid #2D3A5E;
     border-radius: 4px;
+    background: #131725;
+    color: #E2E8F0;
 }
 
 .delete-actions {
@@ -173,15 +198,15 @@
 
 .past-tasks-section {
     margin: 2rem 0 3rem;
-    padding: 1.5rem;
-    border-radius: 16px;
-    background: #f8f9ff;
-    border: 1px solid #e3e6f0;
+    padding: 1.2rem;
+    border-radius: 6px;
+    background: #0E1222;
+    border: 1px solid #2D3A5E;
 }
 
 .past-tasks-section h2 {
     margin-top: 0;
-    color: #333;
+    color: #CBD5E0;
 }
 
 .past-tasks-list {
@@ -190,35 +215,35 @@
     margin: 1rem 0 0 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.7rem;
 }
 
 .past-task-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.9rem 1rem;
-    border-radius: 12px;
-    background: white;
-    border: 1px solid #e0e0e0;
-    color: #333;
+    padding: 0.8rem 1rem;
+    border-radius: 5px;
+    background: #131725;
+    border: 1px solid #2D3A5E;
+    color: #E2E8F0;
 }
 
 .past-task-item strong {
-    color: #2c3e50;
+    color: #F0F3FA;
 }
 
 .past-task-date {
     margin: 0.25rem 0 0 0;
-    font-size: 0.9rem;
-    color: #666;
+    font-size: 0.85rem;
+    color: #6A7A9A;
 }
 
 .past-task-duration {
-    background: #eef2ff;
-    color: #4f46e5;
-    padding: 0.35rem 0.65rem;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    font-weight: 600;
+    background: rgba(0, 212, 255, 0.1);
+    color: #00D4FF;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
 }
