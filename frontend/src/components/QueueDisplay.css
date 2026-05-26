@@ -1,27 +1,32 @@
+/* QueueDisplay.css - Dark Theme */
+
 .queue-display {
-  background: #f7fafc;
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
   padding: 1rem;
-  border-left: 4px solid #667eea;
+  border-left: 3px solid var(--accent-pink);
+  border: 1px solid var(--border-color);
+  margin-top: 1rem;
 }
 
 .queue-display h4 {
-  color: #667eea;
+  color: var(--accent-pink);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
+  font-weight: 800;
 }
 
 .queued-task {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .queued-task-name {
-  color: #2d3748;
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-weight: 500;
   word-break: break-word;
@@ -29,16 +34,19 @@
 }
 
 .clear-queue-btn {
-  background: none;
-  border: none;
-  color: #fc8181;
-  font-size: 1.2rem;
+  background: rgba(255, 107, 157, 0.15);
+  border: 1px solid rgba(255, 107, 157, 0.4);
+  color: var(--accent-pink);
+  font-size: 1rem;
   cursor: pointer;
-  padding: 0 0.25rem;
-  transition: all 0.2s ease;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+  font-weight: 700;
 }
 
 .clear-queue-btn:hover {
-  color: #f56565;
-  transform: scale(1.1);
+  background: rgba(255, 107, 157, 0.3);
+  border-color: var(--accent-pink);
+  transform: scale(1.05);
 }

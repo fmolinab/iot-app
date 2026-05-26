@@ -39,14 +39,15 @@ export async function getTodos() {
     return fetchWithAuth('/todos');
 }
 
-export async function addTodo(task, duration = null, dueDate = null) {
+export async function addTodo(task, duration = null, dueDate = null, description = null) {
     console.log('AddTodo task starting...');
-    console.log('Sending to backend:', { task, duration, dueDate });
+    console.log('Sending to backend:', { task, duration, dueDate, description });
 
     const payload = {
         task,
         duration,
-        due_date: dueDate
+        due_date: dueDate,
+        description
     }
     console.log('payload:', payload);
 

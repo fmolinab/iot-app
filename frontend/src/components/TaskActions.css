@@ -1,3 +1,5 @@
+/* TaskActions.css - Dark Theme */
+
 .task-actions {
   display: flex;
   gap: 0.5rem;
@@ -6,48 +8,61 @@
 }
 
 .action-btn {
-  background: none;
-  border: none;
-  font-size: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  font-size: 0.9rem;
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  opacity: 0.6;
+  padding: 0.35rem 0.7rem;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .action-btn:hover:not(:disabled) {
-  opacity: 1;
   transform: scale(1.05);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
 }
 
 .action-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .play-task {
-  color: #48bb78;
+  color: var(--accent-cyan);
 }
 
 .play-task:hover:not(:disabled) {
-  background: #e6fffa;
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
 }
 
 .queue-task {
-  color: #ed8936;
+  color: var(--accent-pink);
+}
+
+.queue-task:hover:not(:disabled) {
+  background: rgba(255, 107, 157, 0.1);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
 }
 
 .queue-task.queued {
-  color: #38a169;
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.1);
   opacity: 1;
 }
 
 .current-badge {
-  background: #667eea;
-  color: white;
+  background: var(--accent-cyan);
+  color: var(--bg-primary);
   font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 12px;
-  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }

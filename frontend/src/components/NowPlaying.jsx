@@ -225,7 +225,7 @@ export default function NowPlaying({
   return (
     <div className="now-playing">
       <div className="now-playing-header">
-        <h3>Now Playing</h3>
+        <h3>Task Hub</h3>
 
         <div className="connection-status" title={`WebSocket: ${connectionStatus}`}>
           {getConnectionIcon()} {connectionStatus}
@@ -282,6 +282,10 @@ export default function NowPlaying({
         <>
           <div className="current-task">
             <h2>{currentTask.task}</h2>
+
+            {currentTask.description && (
+              <p className="task-description">{currentTask.description}</p>
+            )}
 
             {currentTask.duration && (
               <p className="task-duration">Task planned: {currentTask.duration} min</p>

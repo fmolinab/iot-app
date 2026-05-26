@@ -24,7 +24,7 @@ router.get('/', (req, res) => {
 // create todo, fixed bug: now it saves duration and due date
 router.post('/', (req, res) => {
     const userId = req.user?.id;
-    const { task, duration, due_date } = req.body;
+    const { task, duration, due_date, description } = req.body;
 
     if (!userId) {
         return res.status(401).json({ error: "No user ID" });
@@ -44,11 +44,11 @@ router.post('/', (req, res) => {
 
     try {
         const stmt = db.prepare(`
-            INSERT INTO todos (user_id, task, duration, due_date) 
-            VALUES (?, ?, ?, ?)
+            INSERT INTO todos (user_id, task, duration, due_date, description) 
+            VALUES (?, ?, ?, ?, ?)
         `);
 
-        const result = stmt.run(userId, task, duration, due_date);
+        const result = stmt.run(userId, task, duration, due_date, description || null);
         const newTodo = db.prepare(`SELECT * FROM todos WHERE id = ?`).get(result.lastInsertRowid);
 
         res.status(201).json(newTodo);
@@ -156,7 +156,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
     const userId = req.user.id;
     const todoId = req.params.id;
-    const { task, completed, duration, due_date } = req.body;  
+    const { task, completed, duration, due_date, description } = req.body;  
     try {
         // verify ownership
         const todo = db.prepare(`SELECT * FROM todos WHERE id = ? AND user_id = ?`).get(todoId, userId);
@@ -183,6 +183,10 @@ router.put('/:id', (req, res) => {
         if (due_date !== undefined) { 
             updates.push('due_date = ?');
             values.push(due_date);
+        }
+        if (description !== undefined) { 
+            updates.push('description = ?');
+            values.push(description || null);
         }
 
         if (updates.length === 0) {

@@ -34,6 +34,7 @@ db.exec(`
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         task TEXT NOT NULL,
+        description TEXT,
         completed INTEGER DEFAULT 0,
         duration INTEGER,
         due_date DATETIME,
@@ -73,6 +74,11 @@ if (!todoColumnNames.includes('duration')) {
 if (!todoColumnNames.includes('due_date')) {
     db.exec(`ALTER TABLE todos ADD COLUMN due_date DATETIME`);
     console.log('Added missing column: due_date');
+}
+
+if (!todoColumnNames.includes('description')) {
+    db.exec(`ALTER TABLE todos ADD COLUMN description TEXT`);
+    console.log('Added missing column: description');
 }
 
 console.log('Database ready');

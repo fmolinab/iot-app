@@ -1,82 +1,64 @@
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-
-  --bg: #f3f6fb;
-  --bg-soft: #eef3f9;
-
-  --surface: #ffffff;
-  --surface-soft: #f8fafc;
-
-  --text: #1f2937;
-  --text-muted: #64748b;
-  --text-light: #94a3b8;
-
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-soft: #dbeafe;
-
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
-
-  --shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 12px 30px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.12);
+  --bg-primary: #0A0E1A;
+  --bg-secondary: #131725;
+  --bg-tertiary: #0E1222;
+  --bg-hover: #1A1F35;
+  --text-primary: #F0F3FA;
+  --text-secondary: #A0B0D0;
+  --text-muted: #6A7A9A;
+  --border-color: #2D3A5E;
+  --border-light: #4A5A7E;
+  --accent-cyan: #00D4FF;
+  --accent-pink: #FF6B9D;
+  --accent-pink-dark: #e55a8a;
+  --accent-pink-light: #ff85b0;
+  --danger: #ef4b3f;
+  --sidebar-width: 260px;
+  --sidebar-collapsed: 60px;
 }
 
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
-html {
-  min-width: 320px;
-  min-height: 100%;
-  background: var(--bg);
-}
-
 body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 32rem),
-    linear-gradient(180deg, #f8fafc 0%, #eef3f9 100%);
-  color: var(--text);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
+h1 {
+  font-size: 2.2rem;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
 }
 
 button {
+  border-radius: 5px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--bg-tertiary);
   cursor: pointer;
+  transition: all 0.12s ease;
 }
 
-button:disabled {
-  cursor: not-allowed;
+button:hover {
+  border-color: var(--accent-cyan);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }

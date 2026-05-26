@@ -70,7 +70,6 @@ export function formatDurationText(minutes) {
     }
 
     return `${hours} h ${remainingMinutes} min`;
-
 }
 
 export function getTimeRemainingText(dueDate) {
@@ -87,6 +86,21 @@ export function getTimeRemainingText(dueDate) {
     if (diffMins < 60) return `${diffMins} min left`;
     if (diffHours < 24) return `${diffHours} hours left`;
     return `${diffDays} day${diffDays > 1 ? 's' : ''} left`;
+}
+
+export function getUrgencyLevel(dueDate) {
+  if (!dueDate) return 'no-deadline';
+  
+  const now = new Date();
+  const due = new Date(dueDate);
+  const diffHours = (due - now) / (1000 * 60 * 60);
+  
+  if (diffHours < 0) return 'overdue';
+  if (diffHours < 1) return 'critical';
+  if (diffHours < 3) return 'urgent';
+  if (diffHours < 24) return 'warning';
+  if (diffHours < 48) return 'approaching';
+  return 'ok';
 }
 
 export function formatEuropeanDate(dateString) {

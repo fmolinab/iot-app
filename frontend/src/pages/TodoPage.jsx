@@ -16,7 +16,7 @@ export default function TodoPage() {
     const [todo, setTodo] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
-    const [editForm, setEditForm] = useState({ task: '', duration: '', due_date: '' });
+    const [editForm, setEditForm] = useState({ task: '', duration: '', due_date: '', description: '' });
 
     useEffect(() => {
         loadTodo();
@@ -31,7 +31,8 @@ export default function TodoPage() {
                 setEditForm({
                     task: foundTodo.task,
                     duration: foundTodo.duration || '',
-                    due_date: foundTodo.due_date ? foundTodo.due_date.slice(0, 16) : ''
+                    due_date: foundTodo.due_date ? foundTodo.due_date.slice(0, 16) : '',
+                    description: foundTodo.description || ''
                 });
             }
         } catch (err) {
@@ -47,7 +48,8 @@ export default function TodoPage() {
             const updates = {
                 task: editForm.task,
                 duration: editForm.duration ? parseInt(editForm.duration) : null,
-                due_date: editForm.due_date ? new Date(editForm.due_date).toISOString() : null
+                due_date: editForm.due_date ? new Date(editForm.due_date).toISOString() : null,
+                description: editForm.description || null
             };
             const updated = await updateTodo(todo.id, updates);
             setTodo(updated);
@@ -111,6 +113,16 @@ export default function TodoPage() {
                             />
                         </div>
 
+                        <div className="form-group">
+                            <label>Description:</label>
+                            <textarea
+                                value={editForm.description}
+                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                placeholder="Optional description..."
+                                rows="4"
+                            />
+                        </div>
+
                         <div className="edit-actions">
                             <button type="button" onClick={() => setEditing(false)} className="cancel-btn">
                                 Cancel
@@ -141,6 +153,13 @@ export default function TodoPage() {
                                     {todo.completed ? 'Completed' : 'In Progress'}
                                 </span>
                             </div>
+
+                            {todo.description && (
+                                <div className="detail-item">
+                                    <span className="detail-label">Description:</span>
+                                    <span className="detail-value">{todo.description}</span>
+                                </div>
+                            )}
 
                             {todo.duration && (
                                 <div className="detail-item">
