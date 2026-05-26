@@ -10,14 +10,18 @@ import TaskCard from '../components/TaskCard';
 import './Todos.css';
 import { useHourglassWebSocket } from '../hooks/useHourglassWebSocket';
 
+const DEFAULT_DUE_TIME = '23:59';
+
 export default function Todos() {
   const [todos, setTodos] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [duration, setDuration] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('');
+  const [dueTime, setDueTime] = useState(DEFAULT_DUE_TIME);
   const [description, setDescription] = useState('');
   const [showDescriptionField, setShowDescriptionField] = useState(false);
+  const [showCustomDuration, setShowCustomDuration] = useState(false);
+  const [customDurationMinutes, setCustomDurationMinutes] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentStatus, setCurrentStatus] = useState('idle');
@@ -25,14 +29,6 @@ export default function Todos() {
   const navigate = useNavigate();
 
   const hourglass = useHourglassWebSocket();
-  
-  const timeOptions = [];
-  for (let hour = 0; hour < 24; hour++) {
-    for (let minute of ['00', '30']) {
-      const time = `${String(hour).padStart(2, '0')}:${minute}`;
-      timeOptions.push(time);
-    }
-  }
 
   const {
     currentTask,
@@ -113,6 +109,34 @@ export default function Todos() {
     window.dispatchEvent(new CustomEvent('urgentCountUpdate', { detail: urgentCount }));
   }, [todos]);
 
+  const handleDurationChange = (e) => {
+    const value = e.target.value;
+    if (value === 'custom') {
+      setShowCustomDuration(true);
+      setDuration('');
+    } else {
+      setShowCustomDuration(false);
+      setDuration(value);
+      setCustomDurationMinutes('');
+    }
+  };
+
+  const handleCustomDurationChange = (e) => {
+    const minutes = e.target.value;
+    setCustomDurationMinutes(minutes);
+    if (minutes && !isNaN(minutes) && minutes > 0) {
+      setDuration(minutes);
+    } else {
+      setDuration('');
+    }
+  };
+
+  const handleDueDateChange = (e) => {
+    setDueDate(e.target.value);
+    // Reset time to default when date changes
+    setDueTime(DEFAULT_DUE_TIME);
+  };
+
   async function handleAddTodo(e) {
     e.preventDefault();
 
@@ -121,7 +145,7 @@ export default function Todos() {
       return;
     }
 
-    if (!duration) {
+    if (!duration || duration === 'custom') {
       setError('Please select a duration.');
       return;
     }
@@ -131,14 +155,18 @@ export default function Todos() {
       return;
     }
 
-    if (!dueTime) {
-      setError('Please select a due time.');
+    // Use default time if none selected
+    const finalDueTime = dueTime || DEFAULT_DUE_TIME;
+
+    const durationMinutes = parseInt(duration);
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+      setError('Please enter a valid duration.');
       return;
     }
 
     try {
-      const finalDueDate = new Date(`${dueDate}T${dueTime}`).toISOString();
-      const newTodo = await addTodo(newTask.trim(), parseInt(duration), finalDueDate, description.trim() || null);
+      const finalDueDate = new Date(`${dueDate}T${finalDueTime}`).toISOString();
+      const newTodo = await addTodo(newTask.trim(), durationMinutes, finalDueDate, description.trim() || null);
       const todoToAdd = newTodo.newTodo || newTodo;
       setTodos(currentTodos => [todoToAdd, ...currentTodos]);
       await refreshTasks();
@@ -147,9 +175,11 @@ export default function Todos() {
       setNewTask('');
       setDuration('');
       setDueDate('');
-      setDueTime('');
+      setDueTime(DEFAULT_DUE_TIME);
       setDescription('');
       setShowDescriptionField(false);
+      setShowCustomDuration(false);
+      setCustomDurationMinutes('');
       setError('');
     } catch (err) {
       console.error('Failed to add todo:', err);
@@ -218,41 +248,57 @@ export default function Todos() {
                 required
               />
 
-              <select 
-                value={duration} 
-                onChange={(e) => setDuration(e.target.value)}
-                className="duration-select"
-                required
-              >
-                <option value="">Duration</option>
-                <option value="15">15 min</option>
-                <option value="30">30 min</option>
-                <option value="60">1 hour</option>
-                <option value="120">2 hours</option>
-                <option value="240">4 hours</option>
-                <option value="480">8 hours</option>
-                <option value="1440">1 day</option>
-              </select>
+              <div className="duration-wrapper">
+                <select 
+                  value={showCustomDuration ? 'custom' : duration} 
+                  onChange={handleDurationChange}
+                  className="duration-select"
+                  required
+                >
+                  <option value="">Duration</option>
+                  <option value="1">1 minute</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="240">4 hours</option>
+                  <option value="720">12 hours</option>
+                  <option value="1440">1 day</option>
+                  <option value="10080">1 week</option>
+                  <option value="custom">Custom (enter minutes)</option>
+                </select>
+                
+                {showCustomDuration && (
+                  <input
+                    type="number"
+                    value={customDurationMinutes}
+                    onChange={handleCustomDurationChange}
+                    placeholder="Enter minutes (e.g., 75)"
+                    className="custom-duration-input"
+                    min="1"
+                    step="1"
+                    autoFocus
+                  />
+                )}
+              </div>
 
               <input
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={handleDueDateChange}
                 className="date-input"
                 required
               />
 
-              <select
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
-                className="date-input"
-                required
-              >
-                <option value="">Time</option>
-                {timeOptions.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
+              <div className="time-wrapper">
+                <input
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  className="time-input"
+                  step="60"
+                />
+              </div>
               
               <button type="button" className="add-description-btn" onClick={() => setShowDescriptionField(!showDescriptionField)}>
                 {showDescriptionField ? '− Description' : '+ Description'}

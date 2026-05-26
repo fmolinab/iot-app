@@ -75,7 +75,7 @@ export default function TodoPage() {
 
     return (
         <div className="todo-page-wrapper">
-            <div className="todo-page-container" style={{ backgroundColor: getTodoColor(todo) }}>
+            <div className="todo-page-container">
                 <button onClick={() => navigate('/todos')} className="back-btn">
                     ← Back to Todos
                 </button>
