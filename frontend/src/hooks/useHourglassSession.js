@@ -48,8 +48,12 @@ export function useHourglassSession({
 
       const startedAt = new Date().toISOString();
       startedAtRef.current = startedAt;
-      sendSandCommand?.(plannedMinutes);
+      sendSandCommand?.("START_SAND", plannedMinutes);
     }
+    if (status === 'paused') {
+      sendSandCommand?.("RESUME_SAND");
+    }
+
     setStatus('active');
     onStatusChange?.('active');
     startClock();
@@ -69,16 +73,18 @@ export function useHourglassSession({
     if (status !== 'active') return false;
 
     clearClock();
+    sendSandCommand?.("PAUSE_SAND");
     setStatus('paused');
     onStatusChange?.('paused');
 
     return true;
-  }, [currentTask, status, clearClock, onStatusChange]);
+  }, [currentTask, status, clearClock, sendSandCommand, onStatusChange]);
 
   const completeSession = useCallback(() => {
     if (!currentTask) return null;
 
     clearClock();
+    sendSandCommand?.("STOP_SAND");
 
     const endedAt = new Date().toISOString();
     const startedAt = startedAtRef.current || endedAt;
@@ -108,6 +114,7 @@ export function useHourglassSession({
     timeElapsed,
     getPlannedMinutes,
     clearClock,
+    sendSandCommand,
     onStatusChange
   ]);
 

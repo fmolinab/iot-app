@@ -104,18 +104,29 @@ export function useHourglassWebSocket() {
   }, [sendLedCommand]);
 
   // Send sand command to ESP32
-  const sendSandCommand = useCallback((durationMinutes) => {
-    const minutes = Number(durationMinutes);
-
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-      console.warn('Invalid sand duration:', durationMinutes);
+// Send sand command to ESP32
+  const sendSandCommand = useCallback((command, durationMinutes = null) => {
+    if (!command) {
+      console.warn('Missing sand command');
       return false;
     }
 
-    return sendActuatorCommand("sand", {
-      command: "START_SAND",
-      duration_minutes: minutes
-    });
+    const payload = {
+      command
+    };
+
+    if (durationMinutes !== null && durationMinutes !== undefined) {
+      const minutes = Number(durationMinutes);
+
+      if (!Number.isFinite(minutes) || minutes <= 0) {
+        console.warn('Invalid sand duration:', durationMinutes);
+        return false;
+      }
+
+      payload.duration_minutes = minutes;
+    }
+
+    return sendActuatorCommand("sand", payload);
   }, [sendActuatorCommand]);
 
   // Subscribe to a device
