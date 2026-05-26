@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './NowPlaying.css';
 import { useHourglassSession } from '../hooks/useHourglassSession';
 import { saveSession } from '../lib/sessions';
@@ -23,15 +23,19 @@ export default function NowPlaying({
     availableDevices,
     subscribedDevice,
     subscribeToDevice,
-    sendLedPulse,
     sendSandCommand,
     fetchDevices
   } = device;
+
+  const handleBreakComplete = useCallback(async () => {
+    await onComplete?.();
+  }, [onComplete]);
 
   const {
     mode,
     setMode,
     status,
+    isBreak,
     displaySeconds,
     plannedMinutes,
     overtimeSeconds,
@@ -39,20 +43,75 @@ export default function NowPlaying({
     pendingSession,
     setPendingSession,
     startSession,
+    startBreak,
     pauseSession,
     completeSession,
+    completeBreak,
     resetSession
   } = useHourglassSession({
     currentTask,
     onStatusChange,
-    sendSandCommand
+    sendSandCommand,
+    onBreakComplete: handleBreakComplete
   });
 
-  // Listen to hardware position changes
+  const finishBreakNow = useCallback(async () => {
+    if (completingRef.current) return;
+
+    completingRef.current = true;
+
+    try {
+      completeBreak();
+      await onComplete?.();
+      resetSession();
+    } finally {
+      completingRef.current = false;
+    }
+  }, [completeBreak, onComplete, resetSession]);
+
+  const handlePlay = useCallback(() => {
+    if (!currentTask) return;
+
+    if (isBreak) {
+      startBreak();
+      return;
+    }
+
+    startSession();
+  }, [currentTask, isBreak, startBreak, startSession]);
+
+  const handlePause = useCallback(() => {
+    if (!currentTask) return;
+
+    pauseSession();
+  }, [currentTask, pauseSession]);
+
+  const handleComplete = useCallback(async () => {
+    if (!currentTask) return;
+
+    // During the hidden break, B / Complete means skip break and move to next real task.
+    if (isBreak) {
+      await finishBreakNow();
+      return;
+    }
+
+    const sessionSummary = completeSession();
+
+    if (!sessionSummary) return;
+
+    console.log('Session completed, waiting for notes:', sessionSummary);
+
+    setNotes('');
+    setSaveError('');
+  }, [currentTask, isBreak, finishBreakNow, completeSession]);
+
+  // Listen to hardware position changes.
   useEffect(() => {
     if (!devicePosition) return;
 
-    // Ignore repeated same position signals
+    // Ignore repeated same position signals.
+    // This also prevents "task complete B" from instantly skipping the break
+    // if the device stays flipped while the break starts.
     if (lastHandledPositionRef.current === devicePosition) {
       return;
     }
@@ -71,6 +130,7 @@ export default function NowPlaying({
       case 'B':
         if (!completingRef.current && status !== 'completed' && currentTask) {
           completingRef.current = true;
+
           handleComplete().finally(() => {
             completingRef.current = false;
           });
@@ -86,39 +146,38 @@ export default function NowPlaying({
       default:
         break;
     }
-  }, [devicePosition, status, currentTask]);
+  }, [
+    devicePosition,
+    status,
+    currentTask,
+    handlePlay,
+    handlePause,
+    handleComplete
+  ]);
 
-  const handlePlay = () => {
-    if (!currentTask) return;
+  const afterSessionSaved = async (sessionMode) => {
+    if (sessionMode === 'timer') {
+      // Pomodoro behavior:
+      // real task saved -> hidden automatic 5 min break starts.
+      // The real task is completed only after the break ends/skips.
+      startBreak();
+      return;
+    }
 
-    startSession();
-  };
-
-  const handlePause = () => {
-    if (!currentTask) return;
-
-    pauseSession();
-  };
-
-  const handleComplete = async () => {
-    if (!currentTask) return;
-
-    const sessionSummary = completeSession();
-
-    if (!sessionSummary) return;
-
-    console.log('Session completed, waiting for notes:', sessionSummary);
-
-    setNotes('');
-    setSaveError('');
+    // Focus mode:
+    // no break, move directly to next task.
+    await onComplete?.();
+    resetSession();
   };
 
   const handleSaveSession = async () => {
     if (!pendingSession) return;
 
     try {
-     setIsSavingSession(true);
+      setIsSavingSession(true);
       setSaveError('');
+
+      const sessionMode = pendingSession.mode;
 
       await saveSession({
         ...pendingSession,
@@ -128,9 +187,7 @@ export default function NowPlaying({
       setPendingSession(null);
       setNotes('');
 
-      await onComplete?.();
-
-      resetSession();
+      await afterSessionSaved(sessionMode);
     } catch (err) {
       console.error('Failed to save session:', err);
       setSaveError(err.message || 'Failed to save session');
@@ -146,6 +203,8 @@ export default function NowPlaying({
       setIsSavingSession(true);
       setSaveError('');
 
+      const sessionMode = pendingSession.mode;
+
       await saveSession({
         ...pendingSession,
         notes: ''
@@ -154,12 +213,10 @@ export default function NowPlaying({
       setPendingSession(null);
       setNotes('');
 
-      await onComplete?.();
-
-      resetSession();
+      await afterSessionSaved(sessionMode);
     } catch (err) {
-    console.error('Failed to save session:', err);
-    setSaveError(err.message || 'Failed to save session');
+      console.error('Failed to save session:', err);
+      setSaveError(err.message || 'Failed to save session');
     } finally {
       setIsSavingSession(false);
     }
@@ -176,6 +233,19 @@ export default function NowPlaying({
   };
 
   const getStatusIcon = () => {
+    if (isBreak) {
+      switch (status) {
+        case 'active':
+          return '☕';
+        case 'paused':
+          return '⏸';
+        case 'completed':
+          return '✓';
+        default:
+          return '☕';
+      }
+    }
+
     switch (status) {
       case 'active':
         return '▶';
@@ -189,6 +259,19 @@ export default function NowPlaying({
   };
 
   const getStatusText = () => {
+    if (isBreak) {
+      switch (status) {
+        case 'active':
+          return 'Break running';
+        case 'paused':
+          return 'Break paused';
+        case 'completed':
+          return 'Break completed';
+        default:
+          return 'Break ready';
+      }
+    }
+
     switch (status) {
       case 'active':
         return mode === 'timer' ? 'Timer running' : 'Focus running';
@@ -222,10 +305,20 @@ export default function NowPlaying({
     }
   };
 
+  const playLabel = isBreak
+    ? status === 'paused'
+      ? 'Resume Break'
+      : 'Start Break'
+    : status === 'paused'
+      ? 'Resume'
+      : 'Play';
+
+  const completeLabel = isBreak ? 'Skip Break' : 'Complete';
+
   return (
     <div className="now-playing">
       <div className="now-playing-header">
-        <h3>Task Hub</h3>
+        <h3>{isBreak ? 'Pomodoro Break' : 'Task Hub'}</h3>
 
         <div className="connection-status" title={`WebSocket: ${connectionStatus}`}>
           {getConnectionIcon()} {connectionStatus}
@@ -260,7 +353,7 @@ export default function NowPlaying({
                 Scan for devices
               </button>
 
-              <small>Make sure your ESP32 is connected to NodeRED</small>
+              <small>Make sure your ESP32 is connected to Node-RED</small>
             </div>
           )}
         </div>
@@ -281,38 +374,52 @@ export default function NowPlaying({
       ) : (
         <>
           <div className="current-task">
-            <h2>{currentTask.task}</h2>
+            {isBreak ? (
+              <>
+                <h2>Break time</h2>
+                <p className="task-duration">Break · 5 min</p>
+                <p className="task-description">
+                  Finished: {currentTask.task}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2>{currentTask.task}</h2>
 
-            {currentTask.description && (
-              <p className="task-description">{currentTask.description}</p>
-            )}
+                {currentTask.duration && (
+                  <p className="task-duration">Planned: {currentTask.duration} min</p>
+                )}
 
-            {currentTask.duration && (
-              <p className="task-duration">Task planned: {currentTask.duration} min</p>
+                {currentTask.description && (
+                  <p className="task-description">{currentTask.description}</p>
+                )}
+              </>
             )}
           </div>
 
-          <div className="mode-selector">
-            <button
-              type="button"
-              className={`control-btn ${mode === 'timer' ? 'active-mode' : ''}`}
-              onClick={() => setMode('timer')}
-              disabled={status === 'active'}
-            >
-              Timer Mode
-            </button>
+          {!isBreak && (
+            <div className="mode-selector">
+              <button
+                type="button"
+                className={`control-btn ${mode === 'timer' ? 'active-mode' : ''}`}
+                onClick={() => setMode('timer')}
+                disabled={status === 'active' || status === 'paused'}
+              >
+                Timer
+              </button>
 
-            <button
-              type="button"
-              className={`control-btn ${mode === 'focus' ? 'active-mode' : ''}`}
-              onClick={() => setMode('focus')}
-              disabled={status === 'active'}
-            >
-              Focus Mode
-            </button>
-          </div>
+              <button
+                type="button"
+                className={`control-btn ${mode === 'focus' ? 'active-mode' : ''}`}
+                onClick={() => setMode('focus')}
+                disabled={status === 'active' || status === 'paused'}
+              >
+                Focus
+              </button>
+            </div>
+          )}
 
-          <div className="timer-section">
+          <div className={`timer-section ${isBreak ? 'break-timer-section' : ''}`}>
             <div className="timer-display">
               <span className="timer-icon">{getStatusIcon()}</span>
               <span className="timer-time">{formatTime(displaySeconds)}</span>
@@ -320,16 +427,27 @@ export default function NowPlaying({
 
             <div className="timer-status">{getStatusText()}</div>
 
-            <div className="timer-planned">
-              <small>
-                Mode: {mode === 'timer' ? 'Timer' : 'Focus'} | Planned:{' '}
-                {plannedMinutes} min
-              </small>
-            </div>
+            {!isBreak && mode === 'timer' && (
+              <div className="timer-planned">
+                Planned: {plannedMinutes} min
+              </div>
+            )}
 
-            {mode === 'focus' && isOvertime && (
+            {!isBreak && mode === 'focus' && (
+              <div className="timer-planned">
+                Focus mode tracks actual time
+              </div>
+            )}
+
+            {isBreak && (
+              <div className="timer-planned">
+                Break before the next task
+              </div>
+            )}
+
+            {!isBreak && isOvertime && (
               <div className="overtime-warning">
-                <small>Overtime: {formatTime(overtimeSeconds)}</small>
+                Overtime: {formatTime(overtimeSeconds)}
               </div>
             )}
           </div>
@@ -338,9 +456,9 @@ export default function NowPlaying({
             <button
               onClick={handlePlay}
               className="control-btn play"
-              disabled={status === 'active'}
+              disabled={status === 'active' || status === 'completed'}
             >
-              {status === 'paused' ? 'Resume' : 'Play'}
+              {playLabel}
             </button>
 
             <button
@@ -356,12 +474,16 @@ export default function NowPlaying({
               className="control-btn complete"
               disabled={status === 'completed'}
             >
-              Complete
+              {completeLabel}
             </button>
           </div>
 
           <div className="device-mapping">
-            <small>Device mapping: Play/Resume (A) | Pause (C) | Complete (B)</small>
+            <small>
+              {isBreak
+                ? 'Break mapping: Resume (A) | Pause (C) | Skip Break (B)'
+                : 'Device mapping: Play/Resume (A) | Pause (C) | Complete (B)'}
+            </small>
           </div>
 
           {devicePosition && (
@@ -369,33 +491,50 @@ export default function NowPlaying({
               <small>
                 Hardware position:{' '}
                 {devicePosition === 'A'
-                  ? 'Upright (Start / Resume)'
+                  ? 'Upright (Play/Resume)'
                   : devicePosition === 'B'
-                  ? 'Flipped (Complete)'
-                  : 'Horizontal (Pause)'}
+                    ? isBreak
+                      ? 'Flipped (Skip Break)'
+                      : 'Flipped (Complete)'
+                    : 'Horizontal (Pause)'}
               </small>
             </div>
           )}
         </>
       )}
+
       {pendingSession && (
         <div className="notes-modal-backdrop">
           <div className="notes-modal">
-            <h3>Session complete</h3>
+            <h3>Session completed</h3>
 
             <p>
-              You completed a {pendingSession.mode === 'timer' ? 'Timer' : 'Focus'} session.
+              Add a short note about this session before continuing.
             </p>
 
             <div className="session-summary">
-              <small>Planned: {pendingSession.planned_minutes} min</small>
-              <small>
+              <span>
+                Mode: {pendingSession.mode === 'timer' ? 'Timer' : 'Focus'}
+              </span>
+
+              <span>
+                Planned: {pendingSession.planned_minutes} min
+              </span>
+
+              <span>
                 Actual: {formatTime(pendingSession.actual_seconds)}
-              </small>
+              </span>
+
               {pendingSession.overtime_seconds > 0 && (
-                <small>
+                <span>
                   Overtime: {formatTime(pendingSession.overtime_seconds)}
-                </small>
+                </span>
+              )}
+
+              {pendingSession.mode === 'timer' && (
+                <span>
+                  Next: hidden 5 min break
+                </span>
               )}
             </div>
 
@@ -407,32 +546,29 @@ export default function NowPlaying({
               id="session-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What did you work on? Any reflections?"
-              rows={5}
-              disabled={isSavingSession}
+              rows="5"
+              placeholder="How did this task go?"
             />
 
             {saveError && (
-              <p className="notes-error">{saveError}</p>
+              <div className="notes-error">{saveError}</div>
             )}
 
             <div className="notes-actions">
               <button
-                type="button"
-                className="control-btn"
+                className="control-btn pause"
                 onClick={handleSkipNotes}
                 disabled={isSavingSession}
               >
-                Skip notes
+                Skip
               </button>
 
               <button
-                type="button"
                 className="control-btn complete"
                 onClick={handleSaveSession}
                 disabled={isSavingSession}
               >
-                {isSavingSession ? 'Saving...' : 'Save session'}
+                {isSavingSession ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

@@ -1,23 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+const BREAK_DURATION_SECONDS = 5 * 60;
+const BREAK_DURATION_MINUTES = 5;
+
 export function useHourglassSession({
   currentTask,
   onStatusChange,
-  sendSandCommand
+  sendSandCommand,
+  onBreakComplete
 }) {
   const [mode, setMode] = useState('timer'); // "timer" or "focus"
   const [status, setStatus] = useState('idle'); // "idle", "active", "paused", "completed"
+  const [sessionPhase, setSessionPhase] = useState('task'); // "task" or "break"
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [pendingSession, setPendingSession] = useState(null);
 
   const intervalRef = useRef(null);
   const startedAtRef = useRef(null);
+  const breakCompletingRef = useRef(false);
+
+  const isBreak = sessionPhase === 'break';
 
   const getPlannedMinutes = useCallback(() => {
     return Number(currentTask?.duration) || 0;
-
   }, [currentTask?.duration]);
-  
+
   const clearClock = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -35,11 +42,11 @@ export function useHourglassSession({
 
   const startSession = useCallback(() => {
     if (!currentTask) return false;
-    
+    if (sessionPhase !== 'task') return false;
+
     const plannedMinutes = getPlannedMinutes();
 
     if (plannedMinutes <= 0) return false;
-
     if (status === 'active') return true;
 
     if (status === 'idle' || status === 'completed') {
@@ -48,10 +55,12 @@ export function useHourglassSession({
 
       const startedAt = new Date().toISOString();
       startedAtRef.current = startedAt;
-      sendSandCommand?.("START_SAND", plannedMinutes);
+
+      sendSandCommand?.('START_SAND', plannedMinutes);
     }
+
     if (status === 'paused') {
-      sendSandCommand?.("RESUME_SAND");
+      sendSandCommand?.('RESUME_SAND');
     }
 
     setStatus('active');
@@ -61,8 +70,43 @@ export function useHourglassSession({
     return true;
   }, [
     currentTask,
+    sessionPhase,
     status,
     getPlannedMinutes,
+    sendSandCommand,
+    onStatusChange,
+    startClock
+  ]);
+
+  const startBreak = useCallback(() => {
+    if (!currentTask) return false;
+
+    // If break is paused, this resumes it.
+    if (sessionPhase === 'break' && status === 'paused') {
+      sendSandCommand?.('RESUME_SAND');
+      setStatus('active');
+      onStatusChange?.('break-active');
+      startClock();
+      return true;
+    }
+
+    setSessionPhase('break');
+    setStatus('active');
+    setTimeElapsed(0);
+    setPendingSession(null);
+    breakCompletingRef.current = false;
+
+    // Hidden automatic break task: same physical hourglass, fixed 5 min.
+    sendSandCommand?.('START_SAND', BREAK_DURATION_MINUTES);
+
+    onStatusChange?.('break-active');
+    startClock();
+
+    return true;
+  }, [
+    currentTask,
+    sessionPhase,
+    status,
     sendSandCommand,
     onStatusChange,
     startClock
@@ -73,18 +117,27 @@ export function useHourglassSession({
     if (status !== 'active') return false;
 
     clearClock();
-    sendSandCommand?.("PAUSE_SAND");
+    sendSandCommand?.('PAUSE_SAND');
+
     setStatus('paused');
-    onStatusChange?.('paused');
+    onStatusChange?.(sessionPhase === 'break' ? 'break-paused' : 'paused');
 
     return true;
-  }, [currentTask, status, clearClock, sendSandCommand, onStatusChange]);
+  }, [
+    currentTask,
+    status,
+    sessionPhase,
+    clearClock,
+    sendSandCommand,
+    onStatusChange
+  ]);
 
   const completeSession = useCallback(() => {
     if (!currentTask) return null;
+    if (sessionPhase !== 'task') return null;
 
     clearClock();
-    sendSandCommand?.("STOP_SAND");
+    sendSandCommand?.('STOP_SAND');
 
     const endedAt = new Date().toISOString();
     const startedAt = startedAtRef.current || endedAt;
@@ -110,6 +163,7 @@ export function useHourglassSession({
     return sessionSummary;
   }, [
     currentTask,
+    sessionPhase,
     mode,
     timeElapsed,
     getPlannedMinutes,
@@ -118,29 +172,51 @@ export function useHourglassSession({
     onStatusChange
   ]);
 
+  const completeBreak = useCallback(() => {
+    if (sessionPhase !== 'break') return false;
+
+    clearClock();
+    sendSandCommand?.('STOP_SAND');
+
+    setStatus('completed');
+    onStatusChange?.('break-completed');
+
+    return true;
+  }, [
+    sessionPhase,
+    clearClock,
+    sendSandCommand,
+    onStatusChange
+  ]);
+
   const resetSession = useCallback(() => {
     clearClock();
     startedAtRef.current = null;
+    breakCompletingRef.current = false;
+
+    setSessionPhase('task');
     setStatus('idle');
     setTimeElapsed(0);
     setPendingSession(null);
+
     onStatusChange?.('idle');
   }, [clearClock, onStatusChange]);
 
-  // Reset when the current task changes
+  // Reset when the real current task changes.
   useEffect(() => {
     resetSession();
   }, [currentTask?.id]);
 
-  // Cleanup when component unmounts
+  // Cleanup when component unmounts.
   useEffect(() => {
     return () => {
       clearClock();
     };
   }, [clearClock]);
 
-  // Timer Mode auto-completion
+  // Timer Mode auto-completion for the real task.
   useEffect(() => {
+    if (sessionPhase !== 'task') return;
     if (status !== 'active') return;
     if (mode !== 'timer') return;
 
@@ -150,6 +226,7 @@ export function useHourglassSession({
       completeSession();
     }
   }, [
+    sessionPhase,
     status,
     mode,
     timeElapsed,
@@ -157,20 +234,58 @@ export function useHourglassSession({
     completeSession
   ]);
 
+  // Hidden break auto-completion.
+  useEffect(() => {
+    if (sessionPhase !== 'break') return;
+    if (status !== 'active') return;
+    if (timeElapsed < BREAK_DURATION_SECONDS) return;
+    if (breakCompletingRef.current) return;
+
+    breakCompletingRef.current = true;
+
+    const finishBreak = async () => {
+      completeBreak();
+      await onBreakComplete?.();
+      resetSession();
+    };
+
+    finishBreak();
+  }, [
+    sessionPhase,
+    status,
+    timeElapsed,
+    completeBreak,
+    onBreakComplete,
+    resetSession
+  ]);
+
   const plannedMinutes = getPlannedMinutes();
   const plannedSeconds = plannedMinutes * 60;
 
+  const breakRemainingSeconds = Math.max(
+    0,
+    BREAK_DURATION_SECONDS - timeElapsed
+  );
+
   const remainingSeconds =
-    mode === 'timer'
-      ? Math.max(0, plannedSeconds - timeElapsed)
-      : null;
+    sessionPhase === 'break'
+      ? breakRemainingSeconds
+      : mode === 'timer'
+        ? Math.max(0, plannedSeconds - timeElapsed)
+        : null;
 
   const displaySeconds =
-    mode === 'timer'
-      ? remainingSeconds
-      : timeElapsed;
+    sessionPhase === 'break'
+      ? breakRemainingSeconds
+      : mode === 'timer'
+        ? remainingSeconds
+        : timeElapsed;
 
-  const overtimeSeconds = Math.max(0, timeElapsed - plannedSeconds);
+  const overtimeSeconds =
+    sessionPhase === 'task'
+      ? Math.max(0, timeElapsed - plannedSeconds)
+      : 0;
+
   const isOvertime = overtimeSeconds > 0;
 
   return {
@@ -178,12 +293,19 @@ export function useHourglassSession({
     setMode,
 
     status,
+    sessionPhase,
+    isBreak,
+
     timeElapsed,
     displaySeconds,
     remainingSeconds,
 
     plannedMinutes,
     plannedSeconds,
+
+    breakDurationSeconds: BREAK_DURATION_SECONDS,
+    breakRemainingSeconds,
+
     overtimeSeconds,
     isOvertime,
 
@@ -191,8 +313,10 @@ export function useHourglassSession({
     setPendingSession,
 
     startSession,
+    startBreak,
     pauseSession,
     completeSession,
+    completeBreak,
     resetSession
   };
 }
