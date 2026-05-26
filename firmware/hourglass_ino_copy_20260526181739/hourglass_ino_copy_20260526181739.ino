@@ -74,7 +74,7 @@ const int* finalBulb = lowerFinalOrder;
 // ==========================================
 // GRAVITY PATHS
 //
-// Upright requested logic:
+// Upright logic:
 //
 // 15-8-6-0
 // 16-7-5-1
@@ -115,7 +115,7 @@ const int gravityLengthsUp[9] = {
   1, 1
 };
 
-// Flipped paths: reverse direction from bottom to top
+// Flipped paths: bottom to top
 const int downPath0[] = {10, 14, 15};
 const int downPath1[] = {11, 13, 16};
 const int downPath2[] = {11, 12, 17};
@@ -157,14 +157,11 @@ unsigned long pauseStartedMillis = 0;
 unsigned long gravityStepMillis = 0;
 
 unsigned long totalDurationMinutes = 1;
+unsigned long totalDurationMs = 0;
 
-// Total available time for each grain
 unsigned long grainTotalMs = 0;
-
-// Waiting time before each grain starts moving
 unsigned long sandInterval = 0;
 
-// Visual timing
 unsigned long fadeDuration = 400;
 unsigned long gravityStepMs = 90;
 
@@ -181,16 +178,12 @@ bool isPaused = false;
 bool sandRunning = false;
 
 // ==========================================
-// NEW: MODE AND OVERTIME VARIABLES
+// MODE / FOCUS OVERTIME VARIABLES
 // ==========================================
 
-String currentMode = "TIMER";  // "TIMER" or "FOCUS"
-bool inOvertime = false;        // Only true for Focus Mode after 100%
+String currentMode = "TIMER";     // "TIMER" or "FOCUS"
+bool inOvertime = false;          // true only after focus sand finishes
 unsigned long overtimeStartTime = 0;
-unsigned long lastBlinkMillis = 0;
-float blinkBrightness = 0.0;
-bool blinkDirectionUp = true;   // true = fading up, false = fading down
-unsigned long totalDurationMs = 0;  // Store total task duration in ms
 
 // ==========================================
 // FUNCTION PROTOTYPES
@@ -214,13 +207,14 @@ void resetHourglass();
 void showCompletedHourglass();
 void redrawStableHourglass();
 void runGreenSand();
-void runOvertimeBlink();  // NEW: for Focus Mode overtime breathing
+void runOvertimeBlink();
+
 uint32_t getGreenFade(float progress);
-uint32_t getBlueBreathing(float brightness);  // NEW: blue with brightness 0-1
+uint32_t getBlueBreathing(float brightness);
 
 void checkSerialInput();
 int extractDurationMinutes(String data);
-String extractMode(String data);  // NEW: extract mode from JSON
+String extractMode(String data);
 
 // ==========================================
 // SETUP
@@ -270,13 +264,11 @@ void loop() {
   checkSerialInput();
   readMPU();
 
-  // Normal sand animation
   if (sandRunning && !isPaused && grainsFallen < 9) {
     runGreenSand();
   }
-  
-  // NEW: Overtime breathing for Focus Mode
-  else if (inOvertime && !isPaused && currentMode == "FOCUS") {
+
+  if (inOvertime && !isPaused && currentMode == "FOCUS") {
     runOvertimeBlink();
   }
 }
@@ -320,10 +312,10 @@ void setupWebSocket() {
 
     if (data.indexOf("START_SAND") >= 0) {
       int inputMinutes = extractDurationMinutes(data);
-      String mode = extractMode(data);  // NEW: extract mode
+      String mode = extractMode(data);
 
       if (inputMinutes > 0) {
-        startSand(inputMinutes, mode);  // Pass mode to startSand
+        startSand(inputMinutes, mode);
       } else {
         Serial.println("START_SAND received but duration_minutes was invalid.");
       }
@@ -348,8 +340,9 @@ void setupWebSocket() {
 
     else {
       int inputMinutes = data.toInt();
+
       if (inputMinutes > 0) {
-        startSand(inputMinutes, "TIMER");  // Default to TIMER mode
+        startSand(inputMinutes, "TIMER");
       }
     }
   });
@@ -430,10 +423,13 @@ void sendDeviceRegistration() {
 
 void startSand(int minutes, String mode) {
   totalDurationMinutes = minutes;
-  totalDurationMs = minutes * 60000UL;  // Store for overtime calculation
+  totalDurationMs = minutes * 60000UL;
+
   currentMode = mode;
-  inOvertime = false;  // Reset overtime flag
-  
+  currentMode.toUpperCase();
+
+  inOvertime = false;
+
   recalculateSandInterval();
 
   Serial.println("--- START_SAND ---");
@@ -471,8 +467,7 @@ void resumeSand() {
     if (animationStep == 1) {
       fadeStartTime += pausedDuration;
     }
-    
-    // NEW: Adjust overtime timing if needed
+
     if (inOvertime) {
       overtimeStartTime += pausedDuration;
     }
@@ -495,7 +490,8 @@ void updatePauseState() {
 
 void stopSandToFinal() {
   sandRunning = false;
-  inOvertime = false;  // Stop overtime blinking
+  inOvertime = false;
+
   webPaused = false;
   orientationPaused = false;
   isPaused = true;
@@ -504,15 +500,11 @@ void stopSandToFinal() {
 }
 
 void recalculateSandInterval() {
-  // Sand animation should finish at 95% of selected task duration.
   unsigned long totalMs = totalDurationMinutes * 60000UL;
   unsigned long sandDurationMs = (totalMs * 95UL) / 100UL;
 
-  // Total time available for each of the 9 grains.
   grainTotalMs = sandDurationMs / 9UL;
 
-  // Scale visual effects for short/long tasks.
-  // This keeps short demos snappy and longer tasks smoother.
   if (grainTotalMs < 1500UL) {
     fadeDuration = 150;
     gravityStepMs = 40;
@@ -524,13 +516,8 @@ void recalculateSandInterval() {
     gravityStepMs = 90;
   }
 
-  // Longest gravity path has 3 steps.
   unsigned long maxGravityTime = 3UL * gravityStepMs;
 
-  // Each grain total time is:
-  // wait + fade + gravity.
-  //
-  // So wait must be reduced by fade + max gravity time.
   if (grainTotalMs > fadeDuration + maxGravityTime) {
     sandInterval = grainTotalMs - fadeDuration - maxGravityTime;
   } else {
@@ -608,8 +595,7 @@ void readMPU() {
             currentGravityLengths = gravityLengthsDown;
           }
 
-          // Only reset if a session is not running.
-          if (!sandRunning || grainsFallen >= 9) {
+          if (!sandRunning && !inOvertime) {
             resetHourglass();
           }
         }
@@ -657,12 +643,10 @@ uint32_t getGreenFade(float progress) {
   return pixels.Color(0, (uint8_t)(255 * progress), 0);
 }
 
-// NEW: Blue color with breathing brightness (0.0 to 1.0)
 uint32_t getBlueBreathing(float brightness) {
   if (brightness > 1.0) brightness = 1.0;
   if (brightness < 0.0) brightness = 0.0;
-  
-  // Use a nice medium blue, scaled by brightness
+
   return pixels.Color(0, 0, (uint8_t)(255 * brightness));
 }
 
@@ -670,14 +654,13 @@ void resetHourglass() {
   grainsFallen = 0;
   animationStep = 0;
   gravityIndex = 0;
+
   previousSandMillis = millis();
   fadeStartTime = millis();
   gravityStepMillis = millis();
 
   pixels.clear();
 
-  // Start with 10 lights:
-  // 9 in source bulb + neck.
   for (int i = 0; i < 9; i++) {
     pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
   }
@@ -689,8 +672,6 @@ void resetHourglass() {
 void showCompletedHourglass() {
   pixels.clear();
 
-  // End with 10 lights:
-  // 9 in final bulb + neck.
   for (int i = 0; i < 9; i++) {
     pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
   }
@@ -701,31 +682,15 @@ void showCompletedHourglass() {
   grainsFallen = 9;
   animationStep = 0;
   gravityIndex = 0;
-  
-  // NEW: Check if we should start overtime (only for Focus Mode)
-  if (currentMode == "FOCUS" && !inOvertime && sandRunning == false) {
-    // Sand completed (reached 95%), now we need to wait until 100% of original time
-    // Calculate how much time has passed since session start
-    unsigned long elapsedTime = (millis() - previousSandMillis); // Approximate, but we can track better
-    
-    // For now, we'll track overtime start time when we detect we're past 100%
-    // This will be checked in loop, but we set a flag to monitor
-    overtimeStartTime = millis();
-    inOvertime = true;  // Will start blinking after we verify 100% is reached
-    
-    Serial.println("Focus Mode: Sand completed (95%). Will start breathing at 100%.");
-  }
 }
 
 void redrawStableHourglass() {
   pixels.clear();
 
-  // Remaining source grains.
   for (int i = grainsFallen + 1; i < 9; i++) {
     pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
   }
 
-  // Already landed grains.
   for (int i = 0; i < grainsFallen; i++) {
     pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
   }
@@ -736,14 +701,12 @@ void redrawStableHourglass() {
 void runGreenSand() {
   unsigned long currentMillis = millis();
 
-  // Step 0: wait before next grain starts falling
   if (animationStep == 0 && currentMillis - previousSandMillis >= sandInterval) {
     previousSandMillis = currentMillis;
     fadeStartTime = currentMillis;
     animationStep = 1;
   }
 
-  // Step 1: fade source grain OUT.
   else if (animationStep == 1) {
     float progress = (currentMillis - fadeStartTime) / (float)fadeDuration;
 
@@ -759,7 +722,6 @@ void runGreenSand() {
     }
   }
 
-  // Step 2: fast gravity drop.
   else if (animationStep == 2) {
     int pathLength = currentGravityLengths[grainsFallen];
 
@@ -780,7 +742,6 @@ void runGreenSand() {
     }
   }
 
-  // Step 3: grain lands permanently.
   else if (animationStep == 3) {
     redrawStableHourglass();
 
@@ -793,70 +754,61 @@ void runGreenSand() {
 
     if (grainsFallen >= 9) {
       sandRunning = false;
-      isPaused = true;
 
       showCompletedHourglass();
 
-      wsClient.send("{\"s\":\"timer\",\"v\":\"finished\"}");
-      Serial.println("Timer finished sent to broker");
+      if (currentMode == "FOCUS") {
+        inOvertime = true;
+        isPaused = false;
+        overtimeStartTime = millis();
+
+        Serial.println("Focus Mode: sand completed at 95%.");
+        Serial.println("Waiting until 100%, then starting blue overtime animation.");
+      } else {
+        inOvertime = false;
+        isPaused = true;
+
+        wsClient.send("{\"s\":\"timer\",\"v\":\"finished\"}");
+        Serial.println("Timer finished sent to broker");
+      }
     }
   }
 }
 
-// NEW: Overtime breathing animation for Focus Mode
 void runOvertimeBlink() {
   unsigned long currentMillis = millis();
-  
-  // Calculate how long we've been in overtime
-  unsigned long overtimeElapsed = currentMillis - overtimeStartTime;
-  
-  // Don't start blinking until we've actually passed 100% (5% after sand finished)
-  // Sand finished at 95%, so we need to wait additional 5% of total time
+
+  // Sand finished at 95%.
+  // Wait the remaining 5% of the planned duration before blue breathing starts.
   unsigned long additionalWaitMs = (totalDurationMs * 5UL) / 100UL;
-  
+  unsigned long overtimeElapsed = currentMillis - overtimeStartTime;
+
   if (overtimeElapsed < additionalWaitMs) {
-    // Still in 95-100% zone - just show completed hourglass (static)
-    // But ensure LEDs are still showing green completed state
-    // (showCompletedHourglass already sets this, but maintain it)
-    static unsigned long lastRedraw = 0;
-    if (currentMillis - lastRedraw > 1000) {
-      // Refresh every second to be safe
-      showCompletedHourglass();
-      lastRedraw = currentMillis;
-    }
+    // Keep completed green hourglass visible between 95% and 100%.
     return;
   }
-  
-  // Now we're past 100%, start breathing animation
-  
-  // Breathing cycle: 3 seconds (3000ms) per full cycle (fade up and down)
+
+  // After 100%: all LEDs breathe blue.
   unsigned long cycleTime = 3000;
-  unsigned long cyclePosition = (currentMillis - overtimeStartTime - additionalWaitMs) % cycleTime;
-  float normalizedPosition = (float)cyclePosition / (float)cycleTime;  // 0.0 to 1.0
-  
-  // Use sine wave for smooth breathing effect
-  // sin from -PI/2 to PI/2 gives smooth fade up then down
+  unsigned long cyclePosition =
+    (currentMillis - overtimeStartTime - additionalWaitMs) % cycleTime;
+
+  float normalizedPosition = (float)cyclePosition / (float)cycleTime;
   float brightness;
+
   if (normalizedPosition < 0.5) {
-    // Fading up (0 to 1)
     brightness = normalizedPosition * 2.0;
   } else {
-    // Fading down (1 to 0)
     brightness = 2.0 - (normalizedPosition * 2.0);
   }
-  
-  // Apply easing for smoother feel
-  // brightness = brightness * brightness;  // Optional: quadratic easing
-  
-  // Set all LEDs to blue with current brightness
+
   uint32_t blueColor = getBlueBreathing(brightness);
+
   for (int i = 0; i < NUMPIXELS; i++) {
     pixels.setPixelColor(i, blueColor);
   }
+
   pixels.show();
-  
-  // Optional: very slow update rate to save CPU (but smooth enough)
-  // delay(20);  // Don't delay here, let loop handle timing
 }
 
 // ==========================================
@@ -895,34 +847,32 @@ int extractDurationMinutes(String data) {
   return minutesStr.toInt();
 }
 
-// NEW: Extract mode from JSON message
-// Expected format: "mode":"FOCUS" or "mode":"TIMER"
 String extractMode(String data) {
   int modeIndex = data.indexOf("\"mode\"");
-  
+
   if (modeIndex < 0) {
     Serial.println("No mode field found, defaulting to TIMER");
     return "TIMER";
   }
-  
+
   int colonIndex = data.indexOf(":", modeIndex);
   if (colonIndex < 0) return "TIMER";
-  
+
   int firstQuote = data.indexOf("\"", colonIndex + 1);
   if (firstQuote < 0) return "TIMER";
-  
+
   int secondQuote = data.indexOf("\"", firstQuote + 1);
   if (secondQuote < 0) return "TIMER";
-  
+
   String mode = data.substring(firstQuote + 1, secondQuote);
   mode.toUpperCase();
-  
+
   if (mode == "FOCUS") {
     Serial.println("Mode extracted: FOCUS");
     return "FOCUS";
   }
-  
-  Serial.println("Mode extracted: TIMER (default)");
+
+  Serial.println("Mode extracted: TIMER");
   return "TIMER";
 }
 
@@ -935,7 +885,7 @@ void checkSerialInput() {
     }
 
     if (inputMinutes > 0) {
-      startSand(inputMinutes, "TIMER");  // Serial default to TIMER mode
+      startSand(inputMinutes, "TIMER");
     }
   }
 }
