@@ -3,7 +3,7 @@ module.exports = {
 
     // Disable public Node-RED editor in deployment.
     // The runtime WebSocket/HTTP endpoints still work.
-    httpAdminRoot: false,
+    httpAdminRoot: "/nr",
     httpNodeRoot: "/",
 
     functionGlobalContext: {},
