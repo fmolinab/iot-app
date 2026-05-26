@@ -1,5 +1,5 @@
 /* frontend/src/pages/Todos.css - De-AI'd Dark Theme */
-/* Handcrafted, not generated */
+/* Fixed contrast issues - text now readable on urgency backgrounds */
 
 * {
   margin: 0;
@@ -31,7 +31,7 @@ body {
   overflow: hidden;
 }
 
-/* Header - solid, no gradient */
+/* Header */
 .todos-header {
   background: #1A1F35;
   padding: 1.5rem 2rem;
@@ -210,24 +210,31 @@ body {
   background: #0E1222;
 }
 
-/* Todo items */
+/* Todo items - FIXED CONTRAST */
 .todo-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.8rem;
   padding: 0.9rem;
-  background: #0E1222;
   border-radius: 5px;
   margin-bottom: 0.7rem;
-  border: 1px solid #2D3A5E;
+  border: 1px solid;
   transition: all 0.12s ease;
 }
 
-.todo-item:hover {
-  border-color: #4A5A7E;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  transform: translateY(-1px);
+/* Task text is always white or light - backgrounds are darker now */
+.todo-text {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+  color: #FFFFFF !important; /* Force white text for readability */
+}
+
+.todo-text.completed {
+  text-decoration: line-through;
+  color: #A0B0D0 !important; /* Lighter gray for completed, still readable */
 }
 
 .todo-checkbox {
@@ -255,24 +262,11 @@ body {
   gap: 0.3rem;
 }
 
-.todo-text {
-  font-size: 1rem;
-  color: #F0F3FA;
-  font-weight: 600;
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.todo-text.completed {
-  text-decoration: line-through;
-  color: #6A7A9A;
-}
-
 .time-remaining {
   width: fit-content;
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
   color: #00D4FF;
   font-size: 0.75rem;
   font-weight: 600;
@@ -283,11 +277,11 @@ body {
   content: '⏱ ';
 }
 
-/* Delete button inside list */
+/* Delete button */
 .delete-btn {
-  background: rgba(239, 75, 63, 0.15);
-  border: 1px solid rgba(239, 75, 63, 0.4);
-  color: #ff8a80;
+  background: rgba(239, 75, 63, 0.2);
+  border: 1px solid rgba(239, 75, 63, 0.5);
+  color: #ffa69e;
   padding: 0.45rem 0.8rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -298,72 +292,78 @@ body {
 }
 
 .delete-btn:hover {
-  background: rgba(239, 75, 63, 0.3);
+  background: rgba(239, 75, 63, 0.4);
   border-color: #ef4b3f;
-  color: #ffa69e;
+  color: #ffc5be;
   transform: scale(0.97);
 }
 
-/* Completed tasks */
+/* Urgency colors - DARKER backgrounds so WHITE text is readable */
+.todo-item.overdue {
+  background: #8B1E1E;
+  border-color: #ef4b3f;
+}
+
+.todo-item.critical {
+  background: #A02F2F;
+  border-color: #ff5252;
+}
+
+.todo-item.urgent {
+  background: #B86B0F;
+  border-color: #ffc107;
+}
+
+.todo-item.warning {
+  background: #9C6E1A;
+  border-color: #ff9800;
+}
+
+.todo-item.approaching {
+  background: #1A5A6E;
+  border-color: #00D4FF;
+}
+
+.todo-item.ok {
+  background: #1B5E2A;
+  border-color: #4caf50;
+}
+
+.todo-item.no-deadline {
+  background: #1A1F35;
+  border-color: #4A5A7E;
+}
+
+.todo-item.completed {
+  background: #2D3A5E;
+  border-color: #6A7A9A;
+  opacity: 0.85;
+}
+
+/* Hover states for urgency items */
+.todo-item.overdue:hover,
+.todo-item.critical:hover,
+.todo-item.urgent:hover,
+.todo-item.warning:hover,
+.todo-item.approaching:hover,
+.todo-item.ok:hover,
+.todo-item.no-deadline:hover,
+.todo-item.completed:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Completed tasks section */
 .completed-list {
   padding-bottom: 2rem;
 }
 
 .completed-list .todo-item {
-  background: #0C1020;
   opacity: 0.85;
-  border-color: #2D3A5E;
-}
-
-.completed-list .todo-item:hover {
-  border-color: #4A5A7E;
-  transform: none;
 }
 
 .completed-list .time-remaining {
   display: none;
-}
-
-/* Urgency colors - neon/subtle for dark theme */
-.todo-item.overdue {
-  background: rgba(239, 75, 63, 0.12);
-  border-left: 3px solid #ef4b3f;
-}
-
-.todo-item.critical {
-  background: rgba(255, 82, 82, 0.12);
-  border-left: 3px solid #ff5252;
-}
-
-.todo-item.urgent {
-  background: rgba(255, 193, 7, 0.08);
-  border-left: 3px solid #ffc107;
-}
-
-.todo-item.warning {
-  background: rgba(255, 152, 0, 0.08);
-  border-left: 3px solid #ff9800;
-}
-
-.todo-item.approaching {
-  background: rgba(0, 212, 255, 0.06);
-  border-left: 3px solid #00D4FF;
-}
-
-.todo-item.ok {
-  background: rgba(76, 175, 80, 0.06);
-  border-left: 3px solid #4caf50;
-}
-
-.todo-item.no-deadline {
-  background: #0E1222;
-  border-left: 3px solid #4A5A7E;
-}
-
-.todo-item.completed {
-  background: #0C1020;
-  opacity: 0.7;
-  border-left: 3px solid #6A7A9A;
 }
 
 /* Two-column layout */
@@ -393,7 +393,7 @@ body {
   top: 2rem;
 }
 
-/* Responsive - quirkier breakpoints */
+/* Responsive */
 @media (max-width: 850px) {
   .todos-wrapper {
     padding: 1rem;
