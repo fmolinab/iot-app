@@ -268,7 +268,7 @@ void loop() {
     runGreenSand();
   }
 
-  if (inOvertime && !isPaused && currentMode == "FOCUS") {
+  if (inOvertime && !isPaused) {
     runOvertimeBlink();
   }
 }
@@ -650,6 +650,13 @@ uint32_t getBlueBreathing(float brightness) {
   return pixels.Color(0, 0, (uint8_t)(255 * brightness));
 }
 
+uint32_t getRedBreathing(float brightness) {
+  if (brightness > 1.0) brightness = 1.0;
+  if (brightness < 0.0) brightness = 0.0;
+
+  return pixels.Color((uint8_t)(255 * brightness), 0, 0);
+}
+
 void resetHourglass() {
   grainsFallen = 0;
   animationStep = 0;
@@ -754,7 +761,6 @@ void runGreenSand() {
 
     if (grainsFallen >= 9) {
       sandRunning = false;
-
       showCompletedHourglass();
 
       if (currentMode == "FOCUS") {
@@ -763,13 +769,14 @@ void runGreenSand() {
         overtimeStartTime = millis();
 
         Serial.println("Focus Mode: sand completed at 95%.");
-        Serial.println("Waiting until 100%, then starting blue overtime animation.");
-      } else {
-        inOvertime = false;
-        isPaused = true;
+        Serial.println("Waiting until 100%, then starting BLUE overtime animation.");
+      } else {  // TIMER mode
+        inOvertime = true;
+        isPaused = false;
+        overtimeStartTime = millis();
 
-        wsClient.send("{\"s\":\"timer\",\"v\":\"finished\"}");
-        Serial.println("Timer finished sent to broker");
+        Serial.println("Timer Mode: sand completed at 95%.");
+        Serial.println("Waiting until 100%, then starting RED overtime animation.");
       }
     }
   }
@@ -779,33 +786,46 @@ void runOvertimeBlink() {
   unsigned long currentMillis = millis();
 
   // Sand finished at 95%.
-  // Wait the remaining 5% of the planned duration before blue breathing starts.
+  // Wait the remaining 5% of the planned duration before breathing starts.
   unsigned long additionalWaitMs = (totalDurationMs * 5UL) / 100UL;
   unsigned long overtimeElapsed = currentMillis - overtimeStartTime;
 
   if (overtimeElapsed < additionalWaitMs) {
     // Keep completed green hourglass visible between 95% and 100%.
+    static unsigned long lastRedraw = 0;
+    if (currentMillis - lastRedraw > 500) {
+      showCompletedHourglass();
+      lastRedraw = currentMillis;
+    }
     return;
   }
 
-  // After 100%: all LEDs breathe blue.
-  unsigned long cycleTime = 3000;
+  // After 100%: breathing animation
+  // Color depends on mode: RED for Timer, BLUE for Focus
+  unsigned long cycleTime = 3000;  // 3 seconds per full breath cycle
   unsigned long cyclePosition =
     (currentMillis - overtimeStartTime - additionalWaitMs) % cycleTime;
 
   float normalizedPosition = (float)cyclePosition / (float)cycleTime;
   float brightness;
 
+  // Smooth fade up then down
   if (normalizedPosition < 0.5) {
-    brightness = normalizedPosition * 2.0;
+    brightness = normalizedPosition * 2.0;  // 0 to 1 (fade up)
   } else {
-    brightness = 2.0 - (normalizedPosition * 2.0);
+    brightness = 2.0 - (normalizedPosition * 2.0);  // 1 to 0 (fade down)
   }
 
-  uint32_t blueColor = getBlueBreathing(brightness);
+  // Choose color based on mode
+  uint32_t breathColor;
+  if (currentMode == "FOCUS") {
+    breathColor = getBlueBreathing(brightness);
+  } else {  // TIMER mode
+    breathColor = getRedBreathing(brightness);
+  }
 
   for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, blueColor);
+    pixels.setPixelColor(i, breathColor);
   }
 
   pixels.show();
