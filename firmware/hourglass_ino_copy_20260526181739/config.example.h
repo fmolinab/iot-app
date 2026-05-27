@@ -7,8 +7,8 @@
 
 // WiFi Configuration
 // Replace with your WiFi network name and password
-const char* WIFI_SSID = "Koti_5AyB";
-const char* WIFI_PASSWORD = "RUPKPYR9GSKR2";
+const char* WIFI_SSID = "aalto open";
+const char* WIFI_PASSWORD = "";
 
 // WebSocket Configuration
 // Replace with the server URL provided by your instructor
