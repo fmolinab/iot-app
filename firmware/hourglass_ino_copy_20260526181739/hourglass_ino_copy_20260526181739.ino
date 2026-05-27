@@ -4,12 +4,34 @@
 #include <WiFi.h>
 #include "config.example.h"
 
+using namespace websockets;
+
 // ==========================================
-// WEBSOCKET
+// STATE MACHINE DEFINITION
 // ==========================================
 
-using namespace websockets;
-WebsocketsClient wsClient;
+enum AppState {
+  STATE_IDLE,           // No task running, hourglass full
+  STATE_SAND_RUNNING,   // Sand animation active (0-95%)
+  STATE_SAND_COMPLETE,  // Sand finished, waiting for 100% (95-100%)
+  STATE_OVERTIME        // Past 100%, showing breathing LED
+};
+
+enum Orientation {
+  ORIENT_UP,
+  ORIENT_DOWN,
+  ORIENT_LEAN,
+  ORIENT_UNKNOWN
+};
+
+enum CommandType {
+  CMD_START_SAND,
+  CMD_PAUSE_SAND,
+  CMD_RESUME_SAND,
+  CMD_STOP_SAND,
+  CMD_FOCUS_COMPLETE,
+  CMD_NONE
+};
 
 // ==========================================
 // HARDWARE CONFIG
@@ -18,75 +40,27 @@ WebsocketsClient wsClient;
 #define SDA_PIN 6
 #define SCL_PIN 5
 #define MPU_ADDR 0x68
-
 #define PIN 4
 #define NUMPIXELS 19
 
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+WebsocketsClient wsClient;
 
 // ==========================================
-// LED MAPPINGS - ROW BASED HOURGLASS
-//
-// Physical shape from bottom to top:
-//
-// 0  1  2  3
-// 6  5  4
-// 7  8
-// 9
-// 10 11
-// 14 13 12
-// 15 16 17 18
+// LED MAPPINGS (same as before)
 // ==========================================
 
 const int neckLED = 9;
 
-// Source order when upright: top outer row -> row 3 -> row 2
-const int upperSourceOrder[9] = {
-  15, 16, 17, 18,
-  14, 13, 12,
-  10, 11
-};
-
-// Final destination order when upright
-const int lowerFinalOrder[9] = {
-  0, 1, 2, 3,
-  6, 5, 4,
-  7, 8
-};
-
-// Source order when flipped: bottom outer row -> row 3 -> row 2
-const int lowerSourceOrder[9] = {
-  0, 1, 2, 3,
-  6, 5, 4,
-  7, 8
-};
-
-// Final destination order when flipped
-const int upperFinalOrder[9] = {
-  15, 16, 17, 18,
-  14, 13, 12,
-  10, 11
-};
+const int upperSourceOrder[9] = {15, 16, 17, 18, 14, 13, 12, 10, 11};
+const int lowerFinalOrder[9] = {0, 1, 2, 3, 6, 5, 4, 7, 8};
+const int lowerSourceOrder[9] = {0, 1, 2, 3, 6, 5, 4, 7, 8};
+const int upperFinalOrder[9] = {15, 16, 17, 18, 14, 13, 12, 10, 11};
 
 const int* sourceBulb = upperSourceOrder;
 const int* finalBulb = lowerFinalOrder;
 
-// ==========================================
-// GRAVITY PATHS
-//
-// Upright logic:
-//
-// 15-8-6-0
-// 16-7-5-1
-// 17-8-4-2
-// 18-8-4-3
-// 14-7-6
-// 13-7-5
-// 12-8-4
-// 10-7
-// 11-8
-// ==========================================
-
+// Gravity paths (same as before)
 const int upPath0[] = {8, 6, 0};
 const int upPath1[] = {7, 5, 1};
 const int upPath2[] = {8, 4, 2};
@@ -97,25 +71,9 @@ const int upPath6[] = {8, 4};
 const int upPath7[] = {7};
 const int upPath8[] = {8};
 
-const int* gravityPathsUp[9] = {
-  upPath0,
-  upPath1,
-  upPath2,
-  upPath3,
-  upPath4,
-  upPath5,
-  upPath6,
-  upPath7,
-  upPath8
-};
+const int* gravityPathsUp[9] = {upPath0, upPath1, upPath2, upPath3, upPath4, upPath5, upPath6, upPath7, upPath8};
+const int gravityLengthsUp[9] = {3, 3, 3, 3, 2, 2, 2, 1, 1};
 
-const int gravityLengthsUp[9] = {
-  3, 3, 3, 3,
-  2, 2, 2,
-  1, 1
-};
-
-// Flipped paths: bottom to top
 const int downPath0[] = {10, 14, 15};
 const int downPath1[] = {11, 13, 16};
 const int downPath2[] = {11, 12, 17};
@@ -126,97 +84,80 @@ const int downPath6[] = {11, 12};
 const int downPath7[] = {10};
 const int downPath8[] = {11};
 
-const int* gravityPathsDown[9] = {
-  downPath0,
-  downPath1,
-  downPath2,
-  downPath3,
-  downPath4,
-  downPath5,
-  downPath6,
-  downPath7,
-  downPath8
-};
-
-const int gravityLengthsDown[9] = {
-  3, 3, 3, 3,
-  2, 2, 2,
-  1, 1
-};
+const int* gravityPathsDown[9] = {downPath0, downPath1, downPath2, downPath3, downPath4, downPath5, downPath6, downPath7, downPath8};
+const int gravityLengthsDown[9] = {3, 3, 3, 3, 2, 2, 2, 1, 1};
 
 const int** currentGravityPaths = gravityPathsUp;
 const int* currentGravityLengths = gravityLengthsUp;
 
 // ==========================================
-// ANIMATION VARIABLES
+// STATE VARIABLES
 // ==========================================
 
-unsigned long previousSandMillis = 0;
-unsigned long fadeStartTime = 0;
-unsigned long pauseStartedMillis = 0;
-unsigned long gravityStepMillis = 0;
+AppState currentState = STATE_IDLE;
+Orientation currentOrientation = ORIENT_UNKNOWN;
+Orientation fallOrientation = ORIENT_UP;
 
-unsigned long totalDurationMinutes = 1;
+String currentMode = "TIMER";  // "TIMER" or "FOCUS"
 unsigned long totalDurationMs = 0;
+unsigned long taskStartTime = 0;
+unsigned long totalPausedDuration = 0;
+unsigned long currentPauseStartTime = 0;
 
-unsigned long grainTotalMs = 0;
-unsigned long sandInterval = 0;
-
-unsigned long fadeDuration = 400;
-unsigned long gravityStepMs = 90;
-
+// Sand animation variables
 int grainsFallen = 0;
 int animationStep = 0;
 int gravityIndex = 0;
-
-String currentOrientation = "UNKNOWN";
-String fallOrientation = "UP";
+unsigned long lastAnimationTime = 0;
+unsigned long fadeStartTime = 0;
+unsigned long gravityStepStartTime = 0;
+unsigned long sandInterval = 0;
+unsigned long grainTotalMs = 0;
+unsigned long fadeDuration = 400;
+unsigned long gravityStepMs = 90;
 
 bool webPaused = false;
 bool orientationPaused = false;
-bool isPaused = false;
-bool sandRunning = false;
-
-// ==========================================
-// MODE / FOCUS OVERTIME VARIABLES
-// ==========================================
-
-String currentMode = "TIMER";     // "TIMER" or "FOCUS"
-bool inOvertime = false;          // true only after sand finishes
-unsigned long overtimeStartTime = 0;
 
 // ==========================================
 // FUNCTION PROTOTYPES
 // ==========================================
 
-void connectWiFi();
+void setupWiFi();
 void setupWebSocket();
 void sendDeviceRegistration();
-void keepAlive();
+void processWebSocketMessage(String data);
+CommandType parseCommand(String data);
+int extractDurationMinutes(String data);
+String extractMode(String data);
+void sendIMUData();
 
 void readMPU();
-void sendImuForOrientation(String orientation);
+void updateOrientation(float x_g, float y_g, float z_g);
+void handleOrientationChange();
 
+void transitionTo(AppState newState);
 void startSand(int minutes, String mode);
 void pauseSand();
 void resumeSand();
-void stopSandToFinal();
-void updatePauseState();
-void recalculateSandInterval();
+void stopSand();
+void focusComplete();
 
+void updateSandAnimation();
+void runGreenSand();
 void resetHourglass();
 void showCompletedHourglass();
 void redrawStableHourglass();
-void runGreenSand();
 void runOvertimeBlink();
+void flashBlueLED();
+
+void recalculateSandTiming();
+void updatePauseState();
+void keepAlive();
 
 uint32_t getGreenFade(float progress);
 uint32_t getBlueBreathing(float brightness);
 uint32_t getRedBreathing(float brightness);
-
-void checkSerialInput();
-int extractDurationMinutes(String data);
-String extractMode(String data);
 
 // ==========================================
 // SETUP
@@ -231,320 +172,145 @@ void setup() {
   pixels.clear();
   pixels.show();
 
-  recalculateSandInterval();
-
-  connectWiFi();
+  setupWiFi();
   setupWebSocket();
 
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B);
   Wire.write(0x00);
-  byte error = Wire.endTransmission();
+  Wire.endTransmission();
 
-  if (error == 0) {
-    Serial.println("MPU6050 Awake!");
-    resetHourglass();
-  } else {
-    Serial.println("MPU6050 Wake Error: " + String(error));
-  }
+  resetHourglass();
+  Serial.println("ESP32 Ready - State Machine Active");
 }
 
 // ==========================================
-// LOOP
+// MAIN LOOP
 // ==========================================
 
 void loop() {
-  keepAlive();  // WiFi and WebSocket keepalive
+  keepAlive();
   
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-  }
-
   if (WiFi.status() == WL_CONNECTED) {
     wsClient.poll();
   }
 
-  checkSerialInput();
   readMPU();
+  updateSandAnimation();
+}
 
-  if (sandRunning && !isPaused && grainsFallen < 9) {
-    runGreenSand();
+// ==========================================
+// STATE MACHINE TRANSITIONS
+// ==========================================
+
+void transitionTo(AppState newState) {
+  if (currentState == newState) return;
+  
+  Serial.print("State transition: ");
+  Serial.print(currentState);
+  Serial.print(" -> ");
+  Serial.println(newState);
+  
+  // Exit current state
+  switch (currentState) {
+    case STATE_SAND_RUNNING:
+    case STATE_SAND_COMPLETE:
+    case STATE_OVERTIME:
+      // No special exit actions needed
+      break;
+    default:
+      break;
   }
-
-  if (inOvertime && !isPaused) {
-    runOvertimeBlink();
+  
+  currentState = newState;
+  
+  // Enter new state
+  switch (currentState) {
+    case STATE_IDLE:
+      resetHourglass();
+      break;
+    case STATE_SAND_RUNNING:
+      // Sand animation already running
+      break;
+    case STATE_SAND_COMPLETE:
+      showCompletedHourglass();
+      break;
+    case STATE_OVERTIME:
+      // Overtime animation will run in loop
+      break;
   }
 }
 
 // ==========================================
-// KEEPALIVE FUNCTION
-// ==========================================
-
-void keepAlive() {
-  static unsigned long lastWiFiCheck = 0;
-  static unsigned long lastWebSocketPing = 0;
-  unsigned long currentMillis = millis();
-  
-  // Check WiFi every 10 seconds
-  if (currentMillis - lastWiFiCheck > 10000) {
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("WiFi disconnected! Reconnecting...");
-      connectWiFi();
-    }
-    lastWiFiCheck = currentMillis;
-  }
-  
-  // Send WebSocket ping every 30 seconds (if connected)
-  if (currentMillis - lastWebSocketPing > 30000) {
-    if (wsClient.available()) {
-      wsClient.ping();
-      Serial.println("WebSocket ping sent");
-    }
-    lastWebSocketPing = currentMillis;
-  }
-}
-
-// ==========================================
-// WIFI
-// ==========================================
-
-void connectWiFi() {
-  Serial.print("Connecting to WiFi: ");
-  Serial.println(WIFI_SSID);
-  
-  WiFi.disconnect(true);  // Reset WiFi stack
-  delay(100);
-  
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi Connected!");
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-    
-    // Reconnect WebSocket if needed
-    if (!wsClient.available()) {
-      setupWebSocket();
-    }
-  } else {
-    Serial.println("\nWiFi FAILED.");
-    Serial.println("Will retry in loop...");
-  }
-}
-
-// ==========================================
-// WEBSOCKET
-// ==========================================
-
-void setupWebSocket() {
-  wsClient.onMessage([&](WebsocketsMessage message) {
-    String data = message.data();
-    Serial.println("WS Message Received: " + data);
-
-    if (data.indexOf("START_SAND") >= 0) {
-      int inputMinutes = extractDurationMinutes(data);
-      String mode = extractMode(data);
-
-      if (inputMinutes > 0) {
-        startSand(inputMinutes, mode);
-      } else {
-        Serial.println("START_SAND received but duration_minutes was invalid.");
-      }
-    }
-
-    else if (data.indexOf("PAUSE_SAND") >= 0) {
-      Serial.println("--- PAUSE_SAND RECEIVED ---");
-      webPaused = true;
-      updatePauseState();
-    }
-
-    else if (data.indexOf("RESUME_SAND") >= 0) {
-      Serial.println("--- RESUME_SAND RECEIVED ---");
-      webPaused = false;
-      updatePauseState();
-    }
-
-    else if (data.indexOf("STOP_SAND") >= 0) {
-      Serial.println("--- STOP_SAND RECEIVED ---");
-      stopSandToFinal();
-    }
-
-    else {
-      int inputMinutes = data.toInt();
-
-      if (inputMinutes > 0) {
-        startSand(inputMinutes, "TIMER");
-      }
-    }
-  });
-
-  wsClient.onEvent([&](WebsocketsEvent event, String data) {
-    if (event == WebsocketsEvent::ConnectionOpened) {
-      Serial.println("WebSocket Connection Opened!");
-      sendDeviceRegistration();
-    }
-
-    else if (event == WebsocketsEvent::ConnectionClosed) {
-      Serial.println("WebSocket Connection Closed!");
-    }
-
-    else if (event == WebsocketsEvent::GotPing) {
-      Serial.println("Got Ping");
-    }
-
-    else if (event == WebsocketsEvent::GotPong) {
-      Serial.println("Got Pong");
-    }
-  });
-
-  Serial.println("Connecting to WebSocket Server:");
-  Serial.println(WEBSOCKET_URL);
-
-  wsClient.setCACert(ROOT_CA_CERT);
-
-  bool connected = wsClient.connect(WEBSOCKET_URL);
-
-  if (connected) {
-    Serial.println("WebSocket connect() returned TRUE");
-  } else {
-    Serial.println("WebSocket connect() returned FALSE");
-    Serial.println("Possible causes:");
-    Serial.println("1. WiFi blocks ESP32 / captive portal");
-    Serial.println("2. Railway broker is sleeping/down");
-    Serial.println("3. TLS certificate issue");
-    Serial.println("4. Wrong WebSocket URL");
-  }
-}
-
-void sendDeviceRegistration() {
-  String registration =
-    "{"
-      "\"type\":\"device_registration\","
-      "\"device\":\"hourglass-esp32-01\","
-      "\"device_name\":\"Hourglass ESP32\","
-      "\"device_type\":\"ESP32\","
-      "\"library\":\"ArduinoWebsockets\","
-      "\"version\":\"1.0\","
-      "\"ip\":\"ESP32\","
-      "\"sensors\":["
-        "{"
-          "\"name\":\"imu\","
-          "\"type\":\"imu\","
-          "\"data_type\":\"object\""
-        "}"
-      "],"
-      "\"actuators\":["
-        "{"
-          "\"name\":\"sand\","
-          "\"type\":\"mp3_player\","
-          "\"data_type\":\"object\""
-        "}"
-      "]"
-    "}";
-
-  wsClient.send(registration);
-
-  Serial.println("Device registration sent:");
-  Serial.println(registration);
-}
-
-// ==========================================
-// SAND COMMAND LOGIC
+// COMMAND HANDLERS
 // ==========================================
 
 void startSand(int minutes, String mode) {
-  totalDurationMinutes = minutes;
-  totalDurationMs = minutes * 60000UL;
-
+  totalDurationMs = (unsigned long)minutes * 60000UL;
   currentMode = mode;
   currentMode.toUpperCase();
-
-  inOvertime = false;
-
-  recalculateSandInterval();
-
-  Serial.println("--- START_SAND ---");
-  Serial.println("Mode: " + currentMode);
-  Serial.println("Total Time: " + String(totalDurationMinutes) + " minutes");
-  Serial.println("Total Time MS: " + String(totalDurationMs) + " ms");
-  Serial.println("Sand finishes at 95% of task duration");
-  Serial.println("Per grain total: " + String(grainTotalMs / 1000.0) + " seconds");
-  Serial.println("Wait before grain: " + String(sandInterval / 1000.0) + " seconds");
-  Serial.println("Fade duration: " + String(fadeDuration / 1000.0) + " seconds");
-  Serial.println("Gravity step: " + String(gravityStepMs / 1000.0) + " seconds");
-
+  
+  taskStartTime = millis();
+  totalPausedDuration = 0;
   webPaused = false;
   orientationPaused = false;
-  isPaused = false;
-  sandRunning = true;
-
+  
+  recalculateSandTiming();
+  
+  Serial.println("--- START_SAND ---");
+  Serial.println("Mode: " + currentMode);
+  Serial.println("Duration: " + String(minutes) + " minutes (" + String(totalDurationMs) + " ms)");
+  
   resetHourglass();
+  transitionTo(STATE_SAND_RUNNING);
 }
 
 void pauseSand() {
-  if (!isPaused) {
-    pauseStartedMillis = millis();
+  if (currentPauseStartTime == 0) {
+    currentPauseStartTime = millis();
+    Serial.println("Sand PAUSED");
   }
-
-  isPaused = true;
 }
 
 void resumeSand() {
-  if (isPaused) {
-    unsigned long pausedDuration = millis() - pauseStartedMillis;
-
-    previousSandMillis += pausedDuration;
-    gravityStepMillis += pausedDuration;
-
-    if (animationStep == 1) {
-      fadeStartTime += pausedDuration;
-    }
-
-    if (inOvertime) {
-      overtimeStartTime += pausedDuration;
-    }
-  }
-
-  isPaused = false;
-}
-
-void updatePauseState() {
-  bool shouldPause = webPaused || orientationPaused;
-
-  if (shouldPause && !isPaused) {
-    pauseSand();
-  }
-
-  else if (!shouldPause && isPaused) {
-    resumeSand();
+  if (currentPauseStartTime > 0) {
+    unsigned long pausedDuration = millis() - currentPauseStartTime;
+    totalPausedDuration += pausedDuration;
+    
+    // Adjust animation timers
+    lastAnimationTime += pausedDuration;
+    if (animationStep == 1) fadeStartTime += pausedDuration;
+    if (animationStep == 2) gravityStepStartTime += pausedDuration;
+    
+    currentPauseStartTime = 0;
+    Serial.println("Sand RESUMED (paused for " + String(pausedDuration) + " ms)");
   }
 }
 
-void stopSandToFinal() {
-  sandRunning = false;
-  inOvertime = false;
-
-  webPaused = false;
-  orientationPaused = false;
-  isPaused = true;
-
-  showCompletedHourglass();
+void stopSand() {
+  Serial.println("Sand STOPPED");
+  transitionTo(STATE_IDLE);
 }
 
-void recalculateSandInterval() {
-  unsigned long totalMs = totalDurationMinutes * 60000UL;
-  unsigned long sandDurationMs = (totalMs * 95UL) / 100UL;
+void focusComplete() {
+  Serial.println("FOCUS_COMPLETE received - flashing blue LED");
+  flashBlueLED();
+  
+  // If we're in overtime, transition to idle after flash
+  if (currentState == STATE_OVERTIME) {
+    transitionTo(STATE_IDLE);
+  }
+}
 
+// ==========================================
+// SANDS TIMING (95% for animation)
+// ==========================================
+
+void recalculateSandTiming() {
+  unsigned long sandDurationMs = (totalDurationMs * 95UL) / 100UL;
   grainTotalMs = sandDurationMs / 9UL;
-
+  
   if (grainTotalMs < 1500UL) {
     fadeDuration = 150;
     gravityStepMs = 40;
@@ -555,22 +321,185 @@ void recalculateSandInterval() {
     fadeDuration = 400;
     gravityStepMs = 90;
   }
-
+  
   unsigned long maxGravityTime = 3UL * gravityStepMs;
-
   if (grainTotalMs > fadeDuration + maxGravityTime) {
     sandInterval = grainTotalMs - fadeDuration - maxGravityTime;
   } else {
     sandInterval = 1;
   }
+}
 
-  Serial.println("--- SAND TIMING UPDATED ---");
-  Serial.println("Task duration: " + String(totalDurationMinutes) + " minutes");
-  Serial.println("Sand duration 95%: " + String(sandDurationMs / 1000.0) + " seconds");
-  Serial.println("Per grain total: " + String(grainTotalMs / 1000.0) + " seconds");
-  Serial.println("Wait before grain: " + String(sandInterval / 1000.0) + " seconds");
-  Serial.println("Fade duration: " + String(fadeDuration / 1000.0) + " seconds");
-  Serial.println("Gravity step: " + String(gravityStepMs / 1000.0) + " seconds");
+void updateSandAnimation() {
+  if (currentState != STATE_SAND_RUNNING) return;
+  
+  bool isPaused = webPaused || orientationPaused;
+  if (isPaused) return;
+  
+  runGreenSand();
+  
+  // Check if sand animation completed (95%)
+  if (grainsFallen >= 9) {
+    transitionTo(STATE_SAND_COMPLETE);
+  }
+}
+
+void updatePauseState() {
+  bool shouldPause = webPaused || orientationPaused;
+  
+  if (shouldPause && currentPauseStartTime == 0) {
+    pauseSand();
+  } else if (!shouldPause && currentPauseStartTime > 0) {
+    resumeSand();
+  }
+}
+
+// ==========================================
+// LED ANIMATIONS
+// ==========================================
+
+void runGreenSand() {
+  unsigned long currentMillis = millis();
+  
+  if (animationStep == 0 && currentMillis - lastAnimationTime >= sandInterval) {
+    lastAnimationTime = currentMillis;
+    fadeStartTime = currentMillis;
+    animationStep = 1;
+  }
+  else if (animationStep == 1) {
+    float progress = (currentMillis - fadeStartTime) / (float)fadeDuration;
+    if (progress > 1.0) progress = 1.0;
+    
+    redrawStableHourglass();
+    pixels.setPixelColor(sourceBulb[grainsFallen], getGreenFade(1.0 - progress));
+    pixels.show();
+    
+    if (progress >= 1.0) {
+      gravityIndex = 0;
+      gravityStepStartTime = currentMillis;
+      animationStep = 2;
+    }
+  }
+  else if (animationStep == 2) {
+    int pathLength = currentGravityLengths[grainsFallen];
+    
+    if (currentMillis - gravityStepStartTime >= gravityStepMs) {
+      gravityStepStartTime = currentMillis;
+      
+      redrawStableHourglass();
+      int currentLed = currentGravityPaths[grainsFallen][gravityIndex];
+      pixels.setPixelColor(currentLed, pixels.Color(0, 255, 0));
+      pixels.show();
+      
+      gravityIndex++;
+      if (gravityIndex >= pathLength) {
+        animationStep = 3;
+      }
+    }
+  }
+  else if (animationStep == 3) {
+    redrawStableHourglass();
+    pixels.setPixelColor(finalBulb[grainsFallen], pixels.Color(0, 255, 0));
+    pixels.show();
+    
+    grainsFallen++;
+    animationStep = 0;
+    gravityIndex = 0;
+  }
+}
+
+void resetHourglass() {
+  grainsFallen = 0;
+  animationStep = 0;
+  gravityIndex = 0;
+  lastAnimationTime = millis();
+  fadeStartTime = millis();
+  gravityStepStartTime = millis();
+  
+  pixels.clear();
+  for (int i = 0; i < 9; i++) {
+    pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
+  }
+  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
+  pixels.show();
+}
+
+void showCompletedHourglass() {
+  pixels.clear();
+  for (int i = 0; i < 9; i++) {
+    pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
+  }
+  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
+  pixels.show();
+}
+
+void redrawStableHourglass() {
+  pixels.clear();
+  for (int i = grainsFallen + 1; i < 9; i++) {
+    pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
+  }
+  for (int i = 0; i < grainsFallen; i++) {
+    pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
+  }
+  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
+}
+
+void runOvertimeBlink() {
+  unsigned long currentMillis = millis();
+  unsigned long overtimeElapsed = currentMillis - taskStartTime - totalPausedDuration;
+  
+  // Wait until we've passed 100%
+  if (overtimeElapsed < totalDurationMs) {
+    showCompletedHourglass();
+    return;
+  }
+  
+  // Breathing animation after 100%
+  unsigned long cycleTime = 3000;
+  unsigned long cyclePosition = (overtimeElapsed - totalDurationMs) % cycleTime;
+  float normalizedPosition = (float)cyclePosition / (float)cycleTime;
+  float brightness = (normalizedPosition < 0.5) ? normalizedPosition * 2.0 : 2.0 - (normalizedPosition * 2.0);
+  
+  uint32_t breathColor = (currentMode == "FOCUS") ? getBlueBreathing(brightness) : getRedBreathing(brightness);
+  
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, breathColor);
+  }
+  pixels.show();
+}
+
+void flashBlueLED() {
+  for (int flash = 0; flash < 3; flash++) {
+    for (int i = 0; i < NUMPIXELS; i++) {
+      pixels.setPixelColor(i, pixels.Color(0, 0, 255));
+    }
+    pixels.show();
+    delay(200);
+    
+    for (int i = 0; i < NUMPIXELS; i++) {
+      pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+    }
+    pixels.show();
+    delay(200);
+  }
+}
+
+uint32_t getGreenFade(float progress) {
+  return pixels.Color(0, (uint8_t)(255 * constrain(progress, 0, 1)), 0);
+}
+
+uint32_t getBlueBreathing(float brightness) {
+  return pixels.Color(0, 0, (uint8_t)(255 * constrain(brightness, 0, 1)));
+}
+
+uint32_t getRedBreathing(float brightness) {
+  return pixels.Color((uint8_t)(255 * constrain(brightness, 0, 1)), 0, 0);
+}
+
+float constrain(float value, float minVal, float maxVal) {
+  if (value < minVal) return minVal;
+  if (value > maxVal) return maxVal;
+  return value;
 }
 
 // ==========================================
@@ -582,382 +511,193 @@ void readMPU() {
   Wire.write(0x3B);
   Wire.endTransmission(false);
   Wire.requestFrom((uint16_t)MPU_ADDR, (uint8_t)6, true);
-
+  
   if (Wire.available() >= 6) {
     int16_t ax_raw = (Wire.read() << 8) | Wire.read();
     int16_t ay_raw = (Wire.read() << 8) | Wire.read();
     int16_t az_raw = (Wire.read() << 8) | Wire.read();
-
+    
     float x_g = ax_raw / 16384.0;
     float y_g = ay_raw / 16384.0;
     float z_g = az_raw / 16384.0;
-
-    String newOrientation = "TRANSITION";
-
-    if (x_g > 0.7) {
-      newOrientation = "UP";
-    } else if (x_g < -0.7) {
-      newOrientation = "DOWN";
-    } else if (abs(z_g) > 0.7 || abs(y_g) > 0.7) {
-      newOrientation = "LEAN";
-    }
-
-    if (
-      newOrientation != currentOrientation &&
-      (newOrientation == "UP" || newOrientation == "DOWN" || newOrientation == "LEAN")
-    ) {
-      currentOrientation = newOrientation;
-
-      Serial.println("Orientation changed to: " + currentOrientation);
-
-      if (newOrientation == "LEAN") {
-        orientationPaused = true;
-        updatePauseState();
-      }
-
-      else {
-        orientationPaused = false;
-
-        if (newOrientation != fallOrientation) {
-          fallOrientation = newOrientation;
-
-          if (newOrientation == "UP") {
-            sourceBulb = upperSourceOrder;
-            finalBulb = lowerFinalOrder;
-            currentGravityPaths = gravityPathsUp;
-            currentGravityLengths = gravityLengthsUp;
-          }
-
-          else if (newOrientation == "DOWN") {
-            sourceBulb = lowerSourceOrder;
-            finalBulb = upperFinalOrder;
-            currentGravityPaths = gravityPathsDown;
-            currentGravityLengths = gravityLengthsDown;
-          }
-
-          if (!sandRunning && !inOvertime) {
-            resetHourglass();
-          }
-        }
-
-        updatePauseState();
-      }
-
-      sendImuForOrientation(currentOrientation);
-    }
+    
+    updateOrientation(x_g, y_g, z_g);
   }
-
   delay(50);
 }
 
-void sendImuForOrientation(String orientation) {
-  if (!wsClient.available()) {
-    Serial.println("Cannot send IMU: WebSocket not available.");
-    return;
+void updateOrientation(float x_g, float y_g, float z_g) {
+  Orientation newOrientation = ORIENT_UNKNOWN;
+  
+  if (x_g > 0.7) {
+    newOrientation = ORIENT_UP;
+  } else if (x_g < -0.7) {
+    newOrientation = ORIENT_DOWN;
+  } else if (abs(z_g) > 0.7 || abs(y_g) > 0.7) {
+    newOrientation = ORIENT_LEAN;
   }
+  
+  if (newOrientation != currentOrientation && newOrientation != ORIENT_UNKNOWN) {
+    currentOrientation = newOrientation;
+    handleOrientationChange();
+    sendIMUData();
+  }
+}
 
-  String imuMsg = "";
+void handleOrientationChange() {
+  Serial.println("Orientation: " + String(currentOrientation));
+  
+  orientationPaused = (currentOrientation == ORIENT_LEAN);
+  updatePauseState();
+  
+  if (currentOrientation == ORIENT_UP) {
+    fallOrientation = ORIENT_UP;
+    sourceBulb = upperSourceOrder;
+    finalBulb = lowerFinalOrder;
+    currentGravityPaths = gravityPathsUp;
+    currentGravityLengths = gravityLengthsUp;
+  } else if (currentOrientation == ORIENT_DOWN) {
+    fallOrientation = ORIENT_DOWN;
+    sourceBulb = lowerSourceOrder;
+    finalBulb = upperFinalOrder;
+    currentGravityPaths = gravityPathsDown;
+    currentGravityLengths = gravityLengthsDown;
+  }
+  
+  if (currentState == STATE_IDLE) {
+    resetHourglass();
+  }
+}
 
-  if (orientation == "UP") {
+void sendIMUData() {
+  if (!wsClient.available()) return;
+  
+  String imuMsg;
+  if (currentOrientation == ORIENT_UP) {
     imuMsg = "I0,0,9.8,0,0,0";
-  } else if (orientation == "LEAN") {
+  } else if (currentOrientation == ORIENT_LEAN) {
     imuMsg = "I9.8,0,0,0,0,0";
-  } else if (orientation == "DOWN") {
+  } else if (currentOrientation == ORIENT_DOWN) {
     imuMsg = "I0,0,-9.8,0,0,0";
   }
-
+  
   if (imuMsg != "") {
     wsClient.send(imuMsg);
-    Serial.println("Sent IMU position: " + imuMsg);
   }
 }
 
 // ==========================================
-// LED ANIMATION
+// WEBSOCKET
 // ==========================================
 
-uint32_t getGreenFade(float progress) {
-  if (progress > 1.0) progress = 1.0;
-  if (progress < 0.0) progress = 0.0;
-
-  return pixels.Color(0, (uint8_t)(255 * progress), 0);
-}
-
-uint32_t getBlueBreathing(float brightness) {
-  if (brightness > 1.0) brightness = 1.0;
-  if (brightness < 0.0) brightness = 0.0;
-
-  return pixels.Color(0, 0, (uint8_t)(255 * brightness));
-}
-
-uint32_t getRedBreathing(float brightness) {
-  if (brightness > 1.0) brightness = 1.0;
-  if (brightness < 0.0) brightness = 0.0;
-
-  return pixels.Color((uint8_t)(255 * brightness), 0, 0);
-}
-
-void resetHourglass() {
-  grainsFallen = 0;
-  animationStep = 0;
-  gravityIndex = 0;
-
-  previousSandMillis = millis();
-  fadeStartTime = millis();
-  gravityStepMillis = millis();
-
-  pixels.clear();
-
-  for (int i = 0; i < 9; i++) {
-    pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
-  }
-
-  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
-  pixels.show();
-}
-
-void showCompletedHourglass() {
-  pixels.clear();
-
-  for (int i = 0; i < 9; i++) {
-    pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
-  }
-
-  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
-  pixels.show();
-
-  grainsFallen = 9;
-  animationStep = 0;
-  gravityIndex = 0;
-}
-
-void redrawStableHourglass() {
-  pixels.clear();
-
-  for (int i = grainsFallen + 1; i < 9; i++) {
-    pixels.setPixelColor(sourceBulb[i], pixels.Color(0, 255, 0));
-  }
-
-  for (int i = 0; i < grainsFallen; i++) {
-    pixels.setPixelColor(finalBulb[i], pixels.Color(0, 255, 0));
-  }
-
-  pixels.setPixelColor(neckLED, pixels.Color(0, 255, 0));
-}
-
-void runGreenSand() {
-  unsigned long currentMillis = millis();
-
-  if (animationStep == 0 && currentMillis - previousSandMillis >= sandInterval) {
-    previousSandMillis = currentMillis;
-    fadeStartTime = currentMillis;
-    animationStep = 1;
-  }
-
-  else if (animationStep == 1) {
-    float progress = (currentMillis - fadeStartTime) / (float)fadeDuration;
-
-    redrawStableHourglass();
-
-    pixels.setPixelColor(sourceBulb[grainsFallen], getGreenFade(1.0 - progress));
-    pixels.show();
-
-    if (progress >= 1.0) {
-      gravityIndex = 0;
-      gravityStepMillis = currentMillis;
-      animationStep = 2;
+void setupWebSocket() {
+  wsClient.onMessage([&](WebsocketsMessage message) {
+    processWebSocketMessage(message.data());
+  });
+  
+  wsClient.onEvent([&](WebsocketsEvent event, String data) {
+    if (event == WebsocketsEvent::ConnectionOpened) {
+      Serial.println("WebSocket Connected");
+      sendDeviceRegistration();
+    } else if (event == WebsocketsEvent::ConnectionClosed) {
+      Serial.println("WebSocket Disconnected");
     }
+  });
+  
+  wsClient.setCACert(ROOT_CA_CERT);
+  wsClient.connect(WEBSOCKET_URL);
+}
+
+void processWebSocketMessage(String data) {
+  Serial.println("WS: " + data);
+  
+  if (data.indexOf("START_SAND") >= 0) {
+    int minutes = extractDurationMinutes(data);
+    String mode = extractMode(data);
+    if (minutes > 0) startSand(minutes, mode);
   }
-
-  else if (animationStep == 2) {
-    int pathLength = currentGravityLengths[grainsFallen];
-
-    if (currentMillis - gravityStepMillis >= gravityStepMs) {
-      gravityStepMillis = currentMillis;
-
-      redrawStableHourglass();
-
-      int currentLed = currentGravityPaths[grainsFallen][gravityIndex];
-      pixels.setPixelColor(currentLed, pixels.Color(0, 255, 0));
-      pixels.show();
-
-      gravityIndex++;
-
-      if (gravityIndex >= pathLength) {
-        animationStep = 3;
-      }
-    }
+  else if (data.indexOf("PAUSE_SAND") >= 0) {
+    webPaused = true;
+    updatePauseState();
   }
-
-  else if (animationStep == 3) {
-    redrawStableHourglass();
-
-    pixels.setPixelColor(finalBulb[grainsFallen], pixels.Color(0, 255, 0));
-    pixels.show();
-
-    grainsFallen++;
-    animationStep = 0;
-    gravityIndex = 0;
-
-    if (grainsFallen >= 9) {
-      sandRunning = false;
-      showCompletedHourglass();
-
-      if (currentMode == "FOCUS") {
-        inOvertime = true;
-        isPaused = false;
-        overtimeStartTime = millis();
-
-        Serial.println("Focus Mode: sand completed at 95%.");
-        Serial.println("Waiting until 100%, then starting BLUE overtime animation.");
-      } else {  // TIMER mode
-        inOvertime = true;
-        isPaused = false;
-        overtimeStartTime = millis();
-
-        Serial.println("Timer Mode: sand completed at 95%.");
-        Serial.println("Waiting until 100%, then starting RED overtime animation.");
-      }
-    }
+  else if (data.indexOf("RESUME_SAND") >= 0) {
+    webPaused = false;
+    updatePauseState();
+  }
+  else if (data.indexOf("STOP_SAND") >= 0) {
+    stopSand();
+  }
+  else if (data.indexOf("FOCUS_COMPLETE") >= 0) {
+    focusComplete();
   }
 }
 
-void runOvertimeBlink() {
-  unsigned long currentMillis = millis();
-
-  // Sand finished at 95%.
-  // Wait the remaining 5% of the planned duration before breathing starts.
-  unsigned long additionalWaitMs = (totalDurationMs * 5UL) / 100UL;
-  unsigned long overtimeElapsed = currentMillis - overtimeStartTime;
-
-  // Debug prints to help diagnose timing issues
-  static unsigned long lastDebugPrint = 0;
-  if (currentMillis - lastDebugPrint > 5000) {  // Print every 5 seconds
-    Serial.print("DEBUG - totalDurationMs: ");
-    Serial.println(totalDurationMs);
-    Serial.print("DEBUG - additionalWaitMs: ");
-    Serial.println(additionalWaitMs);
-    Serial.print("DEBUG - overtimeElapsed: ");
-    Serial.println(overtimeElapsed);
-    lastDebugPrint = currentMillis;
-  }
-
-  if (overtimeElapsed < additionalWaitMs) {
-    // Keep completed green hourglass visible between 95% and 100%.
-    static unsigned long lastRedraw = 0;
-    if (currentMillis - lastRedraw > 500) {
-      showCompletedHourglass();
-      lastRedraw = currentMillis;
-    }
-    return;
-  }
-
-  // After 100%: breathing animation
-  // Color depends on mode: RED for Timer, BLUE for Focus
-  unsigned long cycleTime = 3000;  // 3 seconds per full breath cycle
-  unsigned long cyclePosition =
-    (currentMillis - overtimeStartTime - additionalWaitMs) % cycleTime;
-
-  float normalizedPosition = (float)cyclePosition / (float)cycleTime;
-  float brightness;
-
-  // Smooth fade up then down
-  if (normalizedPosition < 0.5) {
-    brightness = normalizedPosition * 2.0;  // 0 to 1 (fade up)
-  } else {
-    brightness = 2.0 - (normalizedPosition * 2.0);  // 1 to 0 (fade down)
-  }
-
-  // Choose color based on mode
-  uint32_t breathColor;
-  if (currentMode == "FOCUS") {
-    breathColor = getBlueBreathing(brightness);
-  } else {  // TIMER mode
-    breathColor = getRedBreathing(brightness);
-  }
-
-  for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, breathColor);
-  }
-
-  pixels.show();
+CommandType parseCommand(String data) {
+  if (data.indexOf("START_SAND") >= 0) return CMD_START_SAND;
+  if (data.indexOf("PAUSE_SAND") >= 0) return CMD_PAUSE_SAND;
+  if (data.indexOf("RESUME_SAND") >= 0) return CMD_RESUME_SAND;
+  if (data.indexOf("STOP_SAND") >= 0) return CMD_STOP_SAND;
+  if (data.indexOf("FOCUS_COMPLETE") >= 0) return CMD_FOCUS_COMPLETE;
+  return CMD_NONE;
 }
-
-// ==========================================
-// HELPERS
-// ==========================================
 
 int extractDurationMinutes(String data) {
   int keyIndex = data.indexOf("duration_minutes");
-
-  if (keyIndex < 0) {
-    return 0;
-  }
-
+  if (keyIndex < 0) return 0;
+  
   int colonIndex = data.indexOf(":", keyIndex);
-
-  if (colonIndex < 0) {
-    return 0;
-  }
-
+  if (colonIndex < 0) return 0;
+  
   int commaIndex = data.indexOf(",", colonIndex);
   int braceIndex = data.indexOf("}", colonIndex);
-
-  int endIndex = braceIndex;
-
-  if (commaIndex > 0 && commaIndex < braceIndex) {
-    endIndex = commaIndex;
-  }
-
-  if (endIndex < 0) {
-    return 0;
-  }
-
+  int endIndex = (commaIndex > 0 && commaIndex < braceIndex) ? commaIndex : braceIndex;
+  
+  if (endIndex < 0) return 0;
+  
   String minutesStr = data.substring(colonIndex + 1, endIndex);
   minutesStr.trim();
-
   return minutesStr.toInt();
 }
 
 String extractMode(String data) {
   int modeIndex = data.indexOf("\"mode\"");
-
-  if (modeIndex < 0) {
-    Serial.println("No mode field found, defaulting to TIMER");
-    return "TIMER";
-  }
-
+  if (modeIndex < 0) return "TIMER";
+  
   int colonIndex = data.indexOf(":", modeIndex);
-  if (colonIndex < 0) return "TIMER";
-
   int firstQuote = data.indexOf("\"", colonIndex + 1);
-  if (firstQuote < 0) return "TIMER";
-
   int secondQuote = data.indexOf("\"", firstQuote + 1);
-  if (secondQuote < 0) return "TIMER";
-
+  
+  if (firstQuote < 0 || secondQuote < 0) return "TIMER";
+  
   String mode = data.substring(firstQuote + 1, secondQuote);
   mode.toUpperCase();
-
-  if (mode == "FOCUS") {
-    Serial.println("Mode extracted: FOCUS");
-    return "FOCUS";
-  }
-
-  Serial.println("Mode extracted: TIMER");
-  return "TIMER";
+  return (mode == "FOCUS") ? "FOCUS" : "TIMER";
 }
 
-void checkSerialInput() {
-  if (Serial.available() > 0) {
-    int inputMinutes = Serial.parseInt();
+void sendDeviceRegistration() {
+  String registration = "{\"type\":\"device_registration\",\"device\":\"hourglass-esp32-01\",\"device_name\":\"Hourglass ESP32\"}";
+  wsClient.send(registration);
+}
 
-    while (Serial.available() > 0) {
-      Serial.read();
-    }
+// ==========================================
+// WIFI & KEEPALIVE
+// ==========================================
 
-    if (inputMinutes > 0) {
-      startSand(inputMinutes, "TIMER");
-    }
+void setupWiFi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected");
+}
+
+void keepAlive() {
+  static unsigned long lastPing = 0;
+  unsigned long now = millis();
+  
+  if (now - lastPing > 30000) {
+    if (wsClient.available()) wsClient.ping();
+    lastPing = now;
   }
 }
