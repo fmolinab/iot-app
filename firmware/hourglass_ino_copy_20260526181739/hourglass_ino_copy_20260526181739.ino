@@ -182,7 +182,7 @@ bool sandRunning = false;
 // ==========================================
 
 String currentMode = "TIMER";     // "TIMER" or "FOCUS"
-bool inOvertime = false;          // true only after focus sand finishes
+bool inOvertime = false;          // true only after sand finishes
 unsigned long overtimeStartTime = 0;
 
 // ==========================================
@@ -192,6 +192,7 @@ unsigned long overtimeStartTime = 0;
 void connectWiFi();
 void setupWebSocket();
 void sendDeviceRegistration();
+void keepAlive();
 
 void readMPU();
 void sendImuForOrientation(String orientation);
@@ -211,6 +212,7 @@ void runOvertimeBlink();
 
 uint32_t getGreenFade(float progress);
 uint32_t getBlueBreathing(float brightness);
+uint32_t getRedBreathing(float brightness);
 
 void checkSerialInput();
 int extractDurationMinutes(String data);
@@ -253,6 +255,8 @@ void setup() {
 // ==========================================
 
 void loop() {
+  keepAlive();  // WiFi and WebSocket keepalive
+  
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
   }
@@ -274,17 +278,47 @@ void loop() {
 }
 
 // ==========================================
+// KEEPALIVE FUNCTION
+// ==========================================
+
+void keepAlive() {
+  static unsigned long lastWiFiCheck = 0;
+  static unsigned long lastWebSocketPing = 0;
+  unsigned long currentMillis = millis();
+  
+  // Check WiFi every 10 seconds
+  if (currentMillis - lastWiFiCheck > 10000) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi disconnected! Reconnecting...");
+      connectWiFi();
+    }
+    lastWiFiCheck = currentMillis;
+  }
+  
+  // Send WebSocket ping every 30 seconds (if connected)
+  if (currentMillis - lastWebSocketPing > 30000) {
+    if (wsClient.available()) {
+      wsClient.ping();
+      Serial.println("WebSocket ping sent");
+    }
+    lastWebSocketPing = currentMillis;
+  }
+}
+
+// ==========================================
 // WIFI
 // ==========================================
 
 void connectWiFi() {
   Serial.print("Connecting to WiFi: ");
   Serial.println(WIFI_SSID);
-
+  
+  WiFi.disconnect(true);  // Reset WiFi stack
+  delay(100);
+  
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
+  
   int attempts = 0;
-
   while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500);
     Serial.print(".");
@@ -295,9 +329,14 @@ void connectWiFi() {
     Serial.println("\nWiFi Connected!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
+    
+    // Reconnect WebSocket if needed
+    if (!wsClient.available()) {
+      setupWebSocket();
+    }
   } else {
     Serial.println("\nWiFi FAILED.");
-    Serial.println("Try phone hotspot if aalto open does not work.");
+    Serial.println("Will retry in loop...");
   }
 }
 
@@ -435,6 +474,7 @@ void startSand(int minutes, String mode) {
   Serial.println("--- START_SAND ---");
   Serial.println("Mode: " + currentMode);
   Serial.println("Total Time: " + String(totalDurationMinutes) + " minutes");
+  Serial.println("Total Time MS: " + String(totalDurationMs) + " ms");
   Serial.println("Sand finishes at 95% of task duration");
   Serial.println("Per grain total: " + String(grainTotalMs / 1000.0) + " seconds");
   Serial.println("Wait before grain: " + String(sandInterval / 1000.0) + " seconds");
@@ -789,6 +829,18 @@ void runOvertimeBlink() {
   // Wait the remaining 5% of the planned duration before breathing starts.
   unsigned long additionalWaitMs = (totalDurationMs * 5UL) / 100UL;
   unsigned long overtimeElapsed = currentMillis - overtimeStartTime;
+
+  // Debug prints to help diagnose timing issues
+  static unsigned long lastDebugPrint = 0;
+  if (currentMillis - lastDebugPrint > 5000) {  // Print every 5 seconds
+    Serial.print("DEBUG - totalDurationMs: ");
+    Serial.println(totalDurationMs);
+    Serial.print("DEBUG - additionalWaitMs: ");
+    Serial.println(additionalWaitMs);
+    Serial.print("DEBUG - overtimeElapsed: ");
+    Serial.println(overtimeElapsed);
+    lastDebugPrint = currentMillis;
+  }
 
   if (overtimeElapsed < additionalWaitMs) {
     // Keep completed green hourglass visible between 95% and 100%.
